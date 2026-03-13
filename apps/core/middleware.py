@@ -2,13 +2,11 @@ import logging
 import time
 from django.utils.timezone import now
 
-# ── Logger setup ──────────────────────────────────────────────
 request_logger = logging.getLogger('requests')
 
 
 class RequestLogMiddleware:
     """
-    Har request ka log karega:
     - URL
     - Method (GET/POST)
     - User (logged in ya anonymous)
@@ -23,11 +21,9 @@ class RequestLogMiddleware:
     def __call__(self, request):
         start_time = time.time()
 
-        # ── Request aane pe ───────────────────────────────────
         response = self.get_response(request)
 
-        # ── Response jaane pe ─────────────────────────────────
-        duration     = round((time.time() - start_time) * 1000, 2)  # ms mein
+        duration     = round((time.time() - start_time) * 1000, 2)
         user         = request.user.email if request.user.is_authenticated else 'anonymous'
         ip           = self.get_client_ip(request)
         status_code  = response.status_code
@@ -43,7 +39,6 @@ class RequestLogMiddleware:
             f"duration={duration}ms"
         )
 
-        # Status code ke hisaab se log level
         if status_code >= 500:
             request_logger.error(log_message)
         elif status_code >= 400:
@@ -54,7 +49,6 @@ class RequestLogMiddleware:
         return response
 
     def get_client_ip(self, request):
-        """Proxy ke peeche bhi real IP milegi"""
         x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
         if x_forwarded_for:
             return x_forwarded_for.split(',')[0].strip()
