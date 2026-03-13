@@ -1,0 +1,140 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Dashboard - Vistalk{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+{% endblock %}
+
+{% block content %}
+{% include 'components/navbar_public.html' %}
+
+<div style="max-width:1100px;margin:40px auto;padding:0 24px">
+    <div style="margin-bottom:32px">
+        <h1 style="font-family:var(--font-display);font-size:32px;font-weight:800;letter-spacing:-1px">
+            Dashboard 👋
+        </h1>
+        <p style="color:var(--ink-muted);margin-top:4px">Welcome back, {{ user.get_full_name|default:user.username }}!</p>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px">
+        <!-- Profile Card -->
+        <div class="card">
+            <h3 style="font-family:var(--font-display);font-size:15px;font-weight:700;margin-bottom:16px;color:var(--ink-muted);display:flex;align-items:center;gap:8px;">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                    <circle cx="12" cy="7" r="4"/>
+                </svg>
+                YOUR PROFILE
+            </h3>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+                <p style="margin:0;font-size:14px;color:var(--ink-soft);">
+                    <strong style="color:var(--ink);min-width:80px;display:inline-block;">Email:</strong> 
+                    {{ user.email }}
+                </p>
+                <p style="margin:0;font-size:14px;color:var(--ink-soft);">
+                    <strong style="color:var(--ink);min-width:80px;display:inline-block;">Username:</strong> 
+                    {{ user.username }}
+                </p>
+                <p style="margin:0;font-size:14px;color:var(--ink-soft);">
+                    <strong style="color:var(--ink);min-width:80px;display:inline-block;">Full Name:</strong> 
+                    {{ user.get_full_name|default:"-" }}
+                </p>
+                <p style="margin:0;font-size:14px;color:var(--ink-soft);">
+                    <strong style="color:var(--ink);min-width:80px;display:inline-block;">Joined:</strong> 
+                    {{ user.date_joined|date:"M d, Y" }}
+                </p>
+                <p style="margin:0;font-size:14px;color:var(--ink-soft);">
+                    <strong style="color:var(--ink);min-width:80px;display:inline-block;">Type:</strong> 
+                    <span class="tag tag-blue">{{ user.user_type|default:"User" }}</span>
+                </p>
+            </div>
+        </div>
+
+        <!-- Roles Card -->
+        <div class="card">
+            <h3 style="font-family:var(--font-display);font-size:15px;font-weight:700;margin-bottom:16px;color:var(--ink-muted);display:flex;align-items:center;gap:8px;">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                </svg>
+                YOUR ROLES
+            </h3>
+            <div style="display:flex;flex-wrap:wrap;gap:8px">
+                {% for role in user_roles %}
+                    <span class="tag tag-purple">{{ role.display_name|default:role.name }}</span>
+                {% empty %}
+                    <span style="color:var(--ink-muted);font-size:14px;font-style:italic;">No roles assigned</span>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Quick Actions Card (New) -->
+        <div class="card">
+            <h3 style="font-family:var(--font-display);font-size:15px;font-weight:700;margin-bottom:16px;color:var(--ink-muted);display:flex;align-items:center;gap:8px;">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"/>
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                QUICK ACTIONS
+            </h3>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+                <a href="#" style="color:var(--brand);text-decoration:none;font-size:14px;display:flex;align-items:center;gap:8px;padding:4px 0;">
+                    <span style="font-size:16px;">→</span> Edit Profile
+                </a>
+                <a href="#" style="color:var(--brand);text-decoration:none;font-size:14px;display:flex;align-items:center;gap:8px;padding:4px 0;">
+                    <span style="font-size:16px;">→</span> Account Settings
+                </a>
+                <a href="#" style="color:var(--brand);text-decoration:none;font-size:14px;display:flex;align-items:center;gap:8px;padding:4px 0;">
+                    <span style="font-size:16px;">→</span> View Activity
+                </a>
+            </div>
+        </div>
+
+        <!-- Permissions Card (Full Width) -->
+        <div class="card" style="grid-column:1/-1">
+            <h3 style="font-family:var(--font-display);font-size:15px;font-weight:700;margin-bottom:16px;color:var(--ink-muted);display:flex;align-items:center;gap:8px;">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
+                </svg>
+                YOUR PERMISSIONS
+            </h3>
+            <div style="display:flex;flex-wrap:wrap;gap:8px">
+                {% for perm in user_permissions %}
+                    <span class="tag tag-green" style="font-family:monospace;font-size:12px">{{ perm.name }}</span>
+                {% empty %}
+                    <span style="color:var(--ink-muted);font-size:14px;font-style:italic;">No permissions assigned</span>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Recent Activity Card (Optional) -->
+        <div class="card" style="grid-column:1/-1">
+            <h3 style="font-family:var(--font-display);font-size:15px;font-weight:700;margin-bottom:16px;color:var(--ink-muted);display:flex;align-items:center;gap:8px;">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="20" x2="18" y2="10"/>
+                    <line x1="12" y1="20" x2="12" y2="4"/>
+                    <line x1="6" y1="20" x2="6" y2="14"/>
+                </svg>
+                RECENT ACTIVITY
+            </h3>
+            <div style="display:flex;flex-direction:column;gap:12px;">
+                {% for activity in recent_activities|default:"" %}
+                <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);">
+                    <div style="width:32px;height:32px;background:var(--surface-2);border-radius:8px;display:flex;align-items:center;justify-content:center;">
+                        {{ activity.icon|default:"📝" }}
+                    </div>
+                    <div style="flex:1;">
+                        <div style="font-size:14px;color:var(--ink);">{{ activity.description }}</div>
+                        <div style="font-size:11px;color:var(--ink-muted);">{{ activity.timestamp|timesince }} ago</div>
+                    </div>
+                </div>
+                {% empty %}
+                <span style="color:var(--ink-muted);font-size:14px;font-style:italic;">No recent activity</span>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

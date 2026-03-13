@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Vistalk{% endblock %}</title>
+    
+    <!-- Preconnect for fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <!-- Main Stylesheets -->
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/variables.css' %}">
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+
+<!-- Theme initialization script - runs before anything else -->
+<script>
+    (function() {
+        // Get saved theme or default to light
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        
+        // Apply theme to body
+        document.body.setAttribute('data-theme', savedTheme);
+        
+        // Make theme available globally
+        window.currentTheme = savedTheme;
+    })();
+</script>
+
+{% if messages %}
+<div class="toast-wrap">
+    {% for message in messages %}
+    <div class="toast {{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% block content %}{% endblock %}
+
+<!-- Consolidated JavaScript -->
+<script>
+    // Theme toggle function
+    function toggleTheme() {
+        const body = document.body;
+        const currentTheme = body.getAttribute('data-theme');
+        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+        
+        // Update body attribute
+        body.setAttribute('data-theme', newTheme);
+        
+        // Save to localStorage
+        localStorage.setItem('theme', newTheme);
+        
+        // Update global variable
+        window.currentTheme = newTheme;
+        
+        // Update active state on toggle buttons (if you want visual feedback)
+        document.querySelectorAll('.theme-toggle i').forEach(icon => {
+            icon.classList.remove('active');
+            if ((newTheme === 'light' && icon.classList.contains('fa-sun')) ||
+                (newTheme === 'dark' && icon.classList.contains('fa-moon'))) {
+                icon.classList.add('active');
+            }
+        });
+    }
+
+    // Initialize theme toggle buttons on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        const currentTheme = document.body.getAttribute('data-theme');
+        
+        // Set active state on theme toggle icons
+        document.querySelectorAll('.theme-toggle i').forEach(icon => {
+            icon.classList.remove('active');
+            if ((currentTheme === 'light' && icon.classList.contains('fa-sun')) ||
+                (currentTheme === 'dark' && icon.classList.contains('fa-moon'))) {
+                icon.classList.add('active');
+            }
+        });
+    });
+
+    // Toast auto-dismiss
+    setTimeout(() => {
+        document.querySelectorAll('.toast').forEach(toast => {
+            toast.style.transition = 'opacity .5s';
+            toast.style.opacity = '0';
+            setTimeout(() => toast.remove(), 500);
+        });
+    }, 4000);
+
+    // Mobile menu toggle
+    function toggleMobileMenu() {
+        const menu = document.getElementById('mobileMenu');
+        if (menu) menu.classList.toggle('open');
+    }
+
+    // User dropdown toggle
+    function toggleUserDropdown() {
+        const dropdown = document.getElementById('userDropdown');
+        if (dropdown) dropdown.classList.toggle('open');
+    }
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+        const chip = document.querySelector('.sys-user-chip');
+        const dropdown = document.getElementById('userDropdown');
+        
+        if (chip && dropdown && !chip.contains(e.target)) {
+            dropdown.classList.remove('open');
+        }
+    });
+</script>
+
+<!-- Font Awesome for icons -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+{% block extra_js %}{% endblock %}
+</body>
+</html>

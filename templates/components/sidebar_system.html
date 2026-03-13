@@ -1,0 +1,61 @@
+
+<div class="sys-sidebar" id="sidebar">
+    <div class="sidebar-logo">
+        <a href="{% url 'accounts:home' %}" class="logo">V<span>istalk</span></a>
+    </div>
+    
+    <div class="sidebar-nav">
+        <div class="nav-section-label">MAIN</div>
+        
+        <!-- Dashboard Link -->
+        <a href="{% url 'core:admin_dashboard' %}" 
+           class="sidebar-link {% if request.resolver_match.url_name == 'admin_dashboard' %}active{% endif %}">
+            <i class="fas fa-chart-pie"></i>
+            <span>Dashboard</span>
+        </a>
+        
+        <!-- Users Link -->
+        <a href="{% url 'users:index' %}" 
+           class="sidebar-link {% if 'admin/users' in request.path %}active{% endif %}">
+            <i class="fas fa-users"></i>
+            <span>Users</span>
+        </a>
+        
+        <!-- Roles & Permissions Link -->
+        <a href="javascript:;" 
+           class="sidebar-link {% if 'roles' in request.path %}active{% endif %}">
+            <i class="fas fa-lock"></i>
+            <span>Roles & Permissions</span>
+        </a>
+        
+        <div class="nav-section-label">SYSTEM</div>
+        
+        <!-- Settings Link -->
+        <a href="javascript:;" 
+           class="sidebar-link {% if 'settings' in request.path %}active{% endif %}">
+            <i class="fas fa-cog"></i>
+            <span>Settings</span>
+        </a>
+        
+        <!-- Audit Logs Link -->
+        <a href="javascript:;" 
+           class="sidebar-link {% if 'audit' in request.path %}active{% endif %}">
+            <i class="fas fa-history"></i>
+            <span>Audit Logs</span>
+        </a>
+        
+        <!-- Analytics Link -->
+        <a href="javascript:;" 
+           class="sidebar-link {% if 'analytics' in request.path %}active{% endif %}">
+            <i class="fas fa-chart-line"></i>
+            <span>Analytics</span>
+        </a>
+    </div>
+    
+    <div class="sidebar-footer">
+        <a href="{% url 'accounts:logout' %}" class="sidebar-link">
+            <i class="fas fa-sign-out-alt"></i>
+            <span>Logout</span>
+        </a>
+    </div>
+</div>

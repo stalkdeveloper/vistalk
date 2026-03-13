@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Create Account - Vistalk{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/auth.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="auth-wrapper">
+    <div class="auth-left">
+        <a href="{% url 'accounts:home' %}" class="auth-brand">V<span>istalk</span></a>
+        <h2>Join <em>Vistalk</em><br>for free today</h2>
+        <p>Create your account in seconds and start communicating smarter with your team.</p>
+        <div class="steps">
+            <div class="step">
+                <div class="step-num">1</div>
+                <div class="step-text">
+                    <strong>Create your account</strong>
+                    <span>Fill in your basic details below</span>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-num">2</div>
+                <div class="step-text">
+                    <strong>Set up your profile</strong>
+                    <span>Customize your workspace</span>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-num">3</div>
+                <div class="step-text">
+                    <strong>Invite your team</strong>
+                    <span>Start collaborating instantly</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="auth-right">
+        <div class="auth-card">
+            <div class="auth-card-header">
+                <h1>Create Account</h1>
+                <p>Start your free journey with Vistalk</p>
+            </div>
+
+            {% if form.non_field_errors %}
+            <div class="non-field-error">{{ form.non_field_errors.0 }}</div>
+            {% endif %}
+
+            <form method="POST">
+                {% csrf_token %}
+                {% for field in form %}
+                <div class="form-group">
+                    <label class="form-label">{{ field.label }}</label>
+                    <input class="form-input"
+                        type="{{ field.field.widget.input_type }}"
+                        name="{{ field.html_name }}"
+                        placeholder="{{ field.field.widget.attrs.placeholder|default:field.label }}"
+                        value="{{ field.value|default:'' }}">
+                    {% for error in field.errors %}
+                        <p class="form-error">⚠ {{ error }}</p>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+
+                <button type="submit" class="btn-submit">Create Free Account →</button>
+            </form>
+
+            <div class="auth-switch">
+                Already have an account? <a href="{% url 'accounts:login' %}">Sign In</a>
+            </div>
+            <div class="auth-switch" style="margin-top:10px">
+                <a href="{% url 'accounts:home' %}" style="color:var(--text-muted)">← Back to Home</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

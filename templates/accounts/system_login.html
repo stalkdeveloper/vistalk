@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Staff Portal - Vistalk{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/auth.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="auth-wrapper">
+    <div class="auth-left">
+        <a href="{% url 'accounts:home' %}" class="auth-brand">V<span>istalk</span></a>
+        <h2>Staff<br><em>Portal</em></h2>
+        <p>Secure access for Vistalk employees and administrators only.</p>
+        <div class="security-features" style="justify-content:flex-start;margin-top:40px;">
+            <div class="security-item">
+                <span>🛡️</span> 2FA Required
+            </div>
+            <div class="security-item">
+                <span>🔒</span> Encrypted
+            </div>
+            <div class="security-item">
+                <span>📋</span> Audit Log
+            </div>
+        </div>
+    </div>
+
+    <div class="auth-right">
+        <div class="auth-card">
+            <div class="staff-badge">STAFF PORTAL</div>
+            
+            <div class="auth-card-header">
+                <h1>Staff Sign In</h1>
+                <p>Authorized personnel only</p>
+            </div>
+
+            {% if form.non_field_errors %}
+            <div class="non-field-error">{{ form.non_field_errors.0 }}</div>
+            {% endif %}
+
+            <form method="POST">
+                {% csrf_token %}
+                {% for field in form %}
+                <div class="form-group">
+                    <label class="form-label">{{ field.label }}</label>
+                    <input class="form-input"
+                        type="{{ field.field.widget.input_type }}"
+                        name="{{ field.html_name }}"
+                        placeholder="Enter your {{ field.label|lower }}"
+                        value="{{ field.value|default:'' }}"
+                        {% if field.field.widget.attrs.autofocus %}autofocus{% endif %}>
+                    {% for error in field.errors %}
+                        <p class="form-error">⚠ {{ error }}</p>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+
+                <button type="submit" class="btn-submit">Access Staff Portal →</button>
+            </form>
+
+            <div class="warning-note">
+                <span>🔐</span>
+                <p>
+                    This portal is for Vistalk employees and administrators only. 
+                    Regular users should login at <a href="{% url 'accounts:login' %}">/login</a>
+                </p>
+            </div>
+
+            <div class="back-link">
+                <a href="{% url 'accounts:home' %}">Back to Public Site</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

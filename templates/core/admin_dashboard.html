@@ -1,0 +1,133 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Admin Dashboard - Vistalk{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/system.css' %}">
+{% endblock %}
+
+{% block body_class %}sys-layout{% endblock %}
+
+{% block content %}
+<div class="sys-wrapper">
+    <!-- Sidebar -->
+    {% include 'components/sidebar_system.html' %}
+
+    <!-- Main Content -->
+    <div class="sys-main" id="sysMain">
+        <!-- Topbar -->
+        {% include 'components/navbar_system.html' %}
+
+        <!-- Content -->
+        <div class="sys-content">
+            <!-- Page Header -->
+            <div class="page-header">
+                <h1 class="page-title">Dashboard Overview</h1>
+                <p class="page-subtitle">Welcome back, {{ user.get_full_name|default:user.username }} - Staff Dashboard</p>
+            </div>
+
+            <!-- Stats Row -->
+            <div class="stats-grid">
+                {% for stat in stats %}
+                <div class="stat-card">
+                    <div class="stat-label">{{ stat.label }}</div>
+                    <div class="stat-value">{{ stat.value }}</div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- User Info Grid -->
+            <div class="grid-2">
+                <!-- Staff Profile Card -->
+                <div class="sys-card">
+                    <div class="sys-card-title">
+                        <i class="fas fa-user"></i> Staff Profile
+                    </div>
+                    
+                    <div class="info-row">
+                        <span class="info-label">Email:</span>
+                        <span class="info-value">{{ user.email }}</span>
+                    </div>
+                    
+                    <div class="info-row">
+                        <span class="info-label">Username:</span>
+                        <span class="info-value">{{ user.username }}</span>
+                    </div>
+                    
+                    <div class="info-row">
+                        <span class="info-label">Full Name:</span>
+                        <span class="info-value">{{ user.get_full_name|default:" Not Available" }}</span>
+                    </div>
+                    
+                    <div class="info-row">
+                        <span class="info-label">Type:</span>
+                        <span class="tag tag-orange">{{ user.user_type|default:"Staff" }}</span>
+                    </div>
+                    
+                    <div class="info-row">
+                        <span class="info-label">Joined:</span>
+                        <span class="info-value">{{ user.date_joined|date:"M d, Y" }}</span>
+                    </div>
+                    
+                    <div class="info-row">
+                        <span class="info-label">Last Login:</span>
+                        <span class="info-value">{{ user.last_login|date:"M d, Y H:i" }}</span>
+                    </div>
+                </div>
+
+                <!-- Roles & Permissions Card -->
+                <div class="sys-card">
+                    <div class="sys-card-title">
+                        <i class="fas fa-lock"></i> Roles & Permissions
+                    </div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <div style="font-size:13px;font-weight:600;color:var(--sys-muted);margin-bottom:10px;">Assigned Roles</div>
+                        <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                            {% for role in user_roles %}
+                                <span class="tag tag-orange">{{ role.display_name|default:role.name }}</span>
+                            {% empty %}
+                                <span class="tag tag-light">No roles assigned</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <div style="font-size:13px;font-weight:600;color:var(--sys-muted);margin-bottom:10px;">Permissions</div>
+                        <div class="permissions-container">
+                            {% for perm in user_permissions %}
+                                <span class="tag tag-mono">{{ perm.name }}</span>
+                            {% empty %}
+                                <span class="tag tag-light">No specific permissions</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Activity (Optional) -->
+            {% if recent_activities %}
+            <div class="recent-activity">
+                <div class="sys-card">
+                    <div class="sys-card-title">
+                        <i class="fas fa-history"></i> Recent Activity
+                    </div>
+                    
+                    {% for activity in recent_activities %}
+                    <div class="activity-item">
+                        <div class="activity-icon">
+                            <i class="fas {{ activity.icon|default:'fa-pencil-alt' }}"></i>
+                        </div>
+                        <div class="activity-details">
+                            <div class="activity-title">{{ activity.description }}</div>
+                            <div class="activity-time">{{ activity.timestamp|timesince }} ago</div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
