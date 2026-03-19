@@ -157,6 +157,37 @@
     gap: var(--sp-3);
 }
 
+/* ══════════════════════════════════════════════════════════════
+   THEME TOGGLE
+   ══════════════════════════════════════════════════════════════ */
+.theme-toggle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--surface-3);
+    border: 1px solid var(--line);
+    border-radius: var(--r-full);
+    padding: 4px;
+    color: var(--ink-muted);
+    font-size: 13px;
+    transition: all var(--t);
+}
+
+.theme-toggle i {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--r-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--t);
+}
+
+.theme-toggle i.active {
+    background: var(--brand);
+    color: #fff;
+}
+
 .sidebar-toggle {
     background: none;
     border: none;
