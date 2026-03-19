@@ -5,21 +5,29 @@ from django.db import models
 
 class User(AbstractUser):
     USER_TYPE_CHOICES = [
-        ('system', 'System'),      # Company employees/staff - only login, no register
+        ('system',   'System'),    # Staff / employees - login only
         ('platform', 'Platform'),  # Web users - can register
     ]
 
     user_type = models.CharField(
         max_length=20,
         choices=USER_TYPE_CHOICES,
-        default='platform'
+        default='platform',
     )
+
+    # Django's AbstractUser already has first_name and last_name;
+    # we add middle_name and keep email as the login field.
+    middle_name = models.CharField(max_length=150, blank=True)
 
     email = models.EmailField(unique=True)
 
-    # We'll use email as the primary login field
-    USERNAME_FIELD = 'email'
+    USERNAME_FIELD  = 'email'
     REQUIRED_FIELDS = ['username']
+
+    # ── helpers ───────────────────────────────
+    def get_full_name(self):
+        parts = [self.first_name, self.middle_name, self.last_name]
+        return ' '.join(p for p in parts if p).strip() or self.username
 
     def is_system_user(self):
         return self.user_type == 'system'
@@ -31,6 +39,6 @@ class User(AbstractUser):
         return f"{self.email} ({self.user_type})"
 
     class Meta:
-        db_table = 'users'
-        verbose_name = 'User'
+        db_table       = 'users'
+        verbose_name   = 'User'
         verbose_name_plural = 'Users'

@@ -1,79 +1,126 @@
 {% extends 'base.html' %}
 {% load static %}
 {% block title %}Create Account - Vistalk{% endblock %}
-
-{% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/auth.css' %}">
-{% endblock %}
+{% block css %}<link rel="stylesheet" href="{% static 'css/app.css' %}">{% endblock %}
 
 {% block content %}
-<div class="auth-wrapper">
-    <div class="auth-left">
-        <a href="{% url 'accounts:home' %}" class="auth-brand">V<span>istalk</span></a>
-        <h2>Join <em>Vistalk</em><br>for free today</h2>
-        <p>Create your account in seconds and start communicating smarter with your team.</p>
-        <div class="steps">
-            <div class="step">
-                <div class="step-num">1</div>
-                <div class="step-text">
-                    <strong>Create your account</strong>
-                    <span>Fill in your basic details below</span>
-                </div>
-            </div>
-            <div class="step">
-                <div class="step-num">2</div>
-                <div class="step-text">
-                    <strong>Set up your profile</strong>
-                    <span>Customize your workspace</span>
-                </div>
-            </div>
-            <div class="step">
-                <div class="step-num">3</div>
-                <div class="step-text">
-                    <strong>Invite your team</strong>
-                    <span>Start collaborating instantly</span>
-                </div>
-            </div>
+<div class="auth-layout">
+
+  <!-- Left panel -->
+  <div class="auth-panel">
+    <a href="{% url 'accounts:home' %}" class="auth-panel-logo">V<span>istalk</span></a>
+    <h2>Join <em>Vistalk</em><br>for free today</h2>
+    <p>Create your account in seconds and start collaborating.</p>
+    <div class="auth-steps">
+      <div class="auth-step">
+        <div class="auth-step-num">1</div>
+        <div class="auth-step-text">
+          <strong>Create your account</strong>
+          <span>Fill in your details below</span>
         </div>
+      </div>
+      <div class="auth-step">
+        <div class="auth-step-num">2</div>
+        <div class="auth-step-text">
+          <strong>Set up your profile</strong>
+          <span>Customize your workspace</span>
+        </div>
+      </div>
+      <div class="auth-step">
+        <div class="auth-step-num">3</div>
+        <div class="auth-step-text">
+          <strong>Invite your team</strong>
+          <span>Start collaborating instantly</span>
+        </div>
+      </div>
     </div>
+  </div>
 
-    <div class="auth-right">
-        <div class="auth-card">
-            <div class="auth-card-header">
-                <h1>Create Account</h1>
-                <p>Start your free journey with Vistalk</p>
+  <!-- Right / form -->
+  <div class="auth-form-side">
+    <div class="auth-form-box">
+      <div class="auth-form-header">
+        <h1>Create Account</h1>
+        <p>Start your free journey with Vistalk</p>
+      </div>
+
+      {% if form.non_field_errors %}
+      <div class="non-field-error">{{ form.non_field_errors.0 }}</div>
+      {% endif %}
+
+      <form method="POST" novalidate>
+        {% csrf_token %}
+
+        <!-- Name row -->
+        <div class="form-row form-row-2">
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">First Name <span style="color:var(--err)">*</span></label>
+            <input class="form-input" type="text" name="first_name"
+              placeholder="First Name"
+              value="{{ form.first_name.value|default:'' }}">
+            {% for err in form.first_name.errors %}
+            <p class="form-error"><i class="fas fa-exclamation-circle"></i> {{ err }}</p>
+            {% endfor %}
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Last Name <span style="color:var(--err)">*</span></label>
+            <input class="form-input" type="text" name="last_name"
+              placeholder="Last Name"
+              value="{{ form.last_name.value|default:'' }}">
+            {% for err in form.last_name.errors %}
+            <p class="form-error"><i class="fas fa-exclamation-circle"></i> {{ err }}</p>
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- Username & Email -->
+        {% for field in form %}
+          {% if field.html_name in 'username,email' %}
+          <div class="form-group">
+            <label class="form-label">{{ field.label }}</label>
+            <input class="form-input"
+              type="{{ field.field.widget.input_type }}"
+              name="{{ field.html_name }}"
+              placeholder="{{ field.field.widget.attrs.placeholder|default:field.label }}"
+              value="{{ field.value|default:'' }}">
+            {% for err in field.errors %}
+            <p class="form-error"><i class="fas fa-exclamation-circle"></i> {{ err }}</p>
+            {% endfor %}
+          </div>
+          {% endif %}
+        {% endfor %}
+
+        <!-- Password row -->
+        <div class="form-row form-row-2">
+          {% for field in form %}
+            {% if field.html_name in 'password,password_confirm' %}
+            <div class="form-group" style="margin-bottom:0">
+              <label class="form-label">{{ field.label }}</label>
+              <input class="form-input"
+                type="password"
+                name="{{ field.html_name }}"
+                placeholder="{{ field.field.widget.attrs.placeholder|default:field.label }}">
+              {% for err in field.errors %}
+              <p class="form-error"><i class="fas fa-exclamation-circle"></i> {{ err }}</p>
+              {% endfor %}
             </div>
-
-            {% if form.non_field_errors %}
-            <div class="non-field-error">{{ form.non_field_errors.0 }}</div>
             {% endif %}
-
-            <form method="POST">
-                {% csrf_token %}
-                {% for field in form %}
-                <div class="form-group">
-                    <label class="form-label">{{ field.label }}</label>
-                    <input class="form-input"
-                        type="{{ field.field.widget.input_type }}"
-                        name="{{ field.html_name }}"
-                        placeholder="{{ field.field.widget.attrs.placeholder|default:field.label }}"
-                        value="{{ field.value|default:'' }}">
-                    {% for error in field.errors %}
-                        <p class="form-error">⚠ {{ error }}</p>
-                    {% endfor %}
-                </div>
-                {% endfor %}
-
-                <button type="submit" class="btn-submit">Create Free Account →</button>
-            </form>
-
-            <div class="auth-switch">
-                Already have an account? <a href="{% url 'accounts:login' %}">Sign In</a>
-            </div>
-            <div class="auth-switch" style="margin-top:10px">
-                <a href="{% url 'accounts:home' %}" style="color:var(--text-muted)">← Back to Home</a>
-            </div>
+          {% endfor %}
         </div>
+
+        <button type="submit" class="btn-auth-submit" style="margin-top:var(--sp-5)">
+          Create Free Account →
+        </button>
+      </form>
+
+      <div class="auth-switch">
+        Already have an account? <a href="{% url 'accounts:login' %}">Sign In</a>
+      </div>
+      <div class="auth-switch" style="margin-top:10px">
+        <a href="{% url 'accounts:home' %}" style="color:var(--ink-muted)">← Back to Home</a>
+      </div>
     </div>
+  </div>
+
 </div>
 {% endblock %}

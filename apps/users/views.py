@@ -1,51 +1,52 @@
+# apps/users/views.py
 from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required
-from django.utils.decorators import method_decorator
-from django.contrib.auth import update_session_auth_hash
 from django.contrib import messages
 from django.views.generic import View
 
 from apps.users.models import User
 from apps.roles.models import Role, UserRole
-from .forms import UserCreateForm, UserEditForm, AdminPasswordChangeForm
+from apps.roles.mixins import SystemUserMixin, PermissionRequiredMixin, get_user_roles
+from .forms import UserCreateForm, UserEditForm
 
 
-def system_only(view):
-    """Only system users can access"""
-    @login_required(login_url='/admin/login/')
-    def wrapped(request, *args, **kwargs):
-        if request.user.user_type != 'system':
-            return redirect('core:dashboard')
-        return view(request, *args, **kwargs)
-    return wrapped
+# ─────────────────────────────────────────────────────────────
+# List
+# ─────────────────────────────────────────────────────────────
 
+class UserListView(SystemUserMixin, PermissionRequiredMixin, View):
+    required_permission = 'can_view_users'
 
-@method_decorator(system_only, name='dispatch')
-class UserListView(View):
     def get(self, request):
-        search = request.GET.get('search', '')
-        user_type = request.GET.get('user_type', '')
+        search    = request.GET.get('search', '').strip()
+        user_type = request.GET.get('user_type', '').strip()
 
-        users = User.objects.all().order_by('-date_joined')
-
+        qs = User.objects.prefetch_related('user_roles__role').order_by('-date_joined')
         if search:
-            users = users.filter(email__icontains=search) | \
-                    users.filter(username__icontains=search)
+            qs = qs.filter(email__icontains=search) | qs.filter(username__icontains=search)
         if user_type:
-            users = users.filter(user_type=user_type)
+            qs = qs.filter(user_type=user_type)
 
+        from apps.roles.mixins import has_permission
         return render(request, 'users/index.html', {
-            'users': users,
-            'search': search,
+            'users':            qs,
+            'search':           search,
             'user_type_filter': user_type,
-            'total': User.objects.count(),
-            'platform_count': User.objects.filter(user_type='platform').count(),
-            'system_count': User.objects.filter(user_type='system').count(),
+            'total':            User.objects.count(),
+            'platform_count':   User.objects.filter(user_type='platform').count(),
+            'system_count':     User.objects.filter(user_type='system').count(),
+            # Permission flags for template buttons
+            'can_create': has_permission(request.user, 'can_create_users'),
+            'can_edit':   has_permission(request.user, 'can_edit_users'),
+            'can_delete': has_permission(request.user, 'can_delete_users'),
         })
 
 
-@method_decorator(system_only, name='dispatch')
-class UserCreateView(View):
+# ─────────────────────────────────────────────────────────────
+# Create
+# ─────────────────────────────────────────────────────────────
+
+class UserCreateView(SystemUserMixin, PermissionRequiredMixin, View):
+    required_permission = 'can_create_users'
     template_name = 'users/create.html'
 
     def get(self, request):
@@ -53,106 +54,103 @@ class UserCreateView(View):
 
     def post(self, request):
         form = UserCreateForm(request.POST)
-
         if form.is_valid():
             user = form.save(commit=False)
             user.set_password(form.cleaned_data['password'])
-
-            if user.user_type == 'system':
-                user.is_staff = True
-
+            user.first_name  = form.cleaned_data.get('first_name', '')
+            user.middle_name = form.cleaned_data.get('middle_name', '')
+            user.last_name   = form.cleaned_data.get('last_name', '')
+            # Auto-manage is_staff based on user_type
+            user.is_staff = (user.user_type == 'system')
             user.save()
 
-            selected_roles = form.cleaned_data.get('roles', [])
-            for role in selected_roles:
-                UserRole.objects.get_or_create(user=user, role=role)
+            selected_role = form.cleaned_data.get('role')
+            if selected_role:
+                UserRole.objects.get_or_create(user=user, role=selected_role)
 
-            messages.success(request, f"User '{user.username}' created successfully.")
+            messages.success(request, f"User '{user.get_full_name()}' created successfully.")
             return redirect('users:index')
 
         return render(request, self.template_name, {'form': form})
 
 
-@method_decorator(system_only, name='dispatch')
-class UserEditView(View):
+# ─────────────────────────────────────────────────────────────
+# Edit
+# ─────────────────────────────────────────────────────────────
+
+class UserEditView(SystemUserMixin, PermissionRequiredMixin, View):
+    required_permission = 'can_edit_users'
     template_name = 'users/edit.html'
 
-    def get_user(self, pk):
-        return get_object_or_404(User, pk=pk)
-
     def get(self, request, pk):
-        user = self.get_user(pk)
-        # Current roles pre-select
-        current_roles = Role.objects.filter(user_roles__user=user)
-        form = UserEditForm(instance=user, initial={'roles': current_roles})
-        return render(request, self.template_name, {'form': form, 'target_user': user})
+        target = get_object_or_404(User, pk=pk)
+        form   = UserEditForm(instance=target)
+        return render(request, self.template_name, {'form': form, 'target_user': target})
 
     def post(self, request, pk):
-        user = self.get_user(pk)
-        form = UserEditForm(request.POST, instance=user)
+        target = get_object_or_404(User, pk=pk)
+        form   = UserEditForm(request.POST, instance=target)
         if form.is_valid():
             user = form.save(commit=False)
-            if user.user_type == 'system':
-                user.is_staff = True
+            user.first_name  = form.cleaned_data.get('first_name', '')
+            user.middle_name = form.cleaned_data.get('middle_name', '')
+            user.last_name   = form.cleaned_data.get('last_name', '')
+            user.is_staff    = (user.user_type == 'system')
             user.save()
 
-            # Roles update - pehle sab hata do, phir naye lagao
+            # Replace role (single role per user)
             UserRole.objects.filter(user=user).delete()
-            selected_roles = form.cleaned_data.get('roles', [])
-            for role in selected_roles:
-                UserRole.objects.create(user=user, role=role)
+            selected_role = form.cleaned_data.get('role')
+            if selected_role:
+                UserRole.objects.create(user=user, role=selected_role)
 
-            messages.success(request, f"User '{user.username}' updated successfully.")
+            messages.success(request, f"User '{user.get_full_name()}' updated successfully.")
             return redirect('users:index')
 
-        return render(request, self.template_name, {'form': form, 'target_user': user})
+        return render(request, self.template_name, {'form': form, 'target_user': target})
 
 
-@method_decorator(system_only, name='dispatch')
-class UserDeleteView(View):
+# ─────────────────────────────────────────────────────────────
+# Delete
+# ─────────────────────────────────────────────────────────────
+
+class UserDeleteView(SystemUserMixin, PermissionRequiredMixin, View):
+    required_permission = 'can_delete_users'
+
     def post(self, request, pk):
-        user = get_object_or_404(User, pk=pk)
-        # Apne aap ko delete nahi kar sakta
-        if user == request.user:
+        target = get_object_or_404(User, pk=pk)
+
+        # Cannot delete yourself
+        if target == request.user:
             messages.error(request, "You cannot delete your own account.")
             return redirect('users:index')
-        username = user.username
-        user.delete()
-        messages.success(request, f"User '{username}' deleted.")
+
+        # Cannot delete superusers / system admins
+        if target.is_superuser:
+            messages.error(request, "Super-admin accounts cannot be deleted.")
+            return redirect('users:index')
+
+        name = target.get_full_name()
+        target.delete()
+        messages.success(request, f"User '{name}' deleted.")
         return redirect('users:index')
 
 
-@method_decorator(system_only, name='dispatch')
-class UserToggleActiveView(View):
-    """Quick toggle active/inactive"""
+# ─────────────────────────────────────────────────────────────
+# Toggle active
+# ─────────────────────────────────────────────────────────────
+
+class UserToggleActiveView(SystemUserMixin, PermissionRequiredMixin, View):
+    required_permission = 'can_edit_users'
+
     def post(self, request, pk):
-        user = get_object_or_404(User, pk=pk)
-        if user == request.user:
+        target = get_object_or_404(User, pk=pk)
+        if target == request.user:
             messages.error(request, "You cannot deactivate yourself.")
             return redirect('users:index')
-        user.is_active = not user.is_active
-        user.save()
-        status = "activated" if user.is_active else "deactivated"
-        messages.success(request, f"User '{user.username}' {status}.")
+
+        target.is_active = not target.is_active
+        target.save()
+        status = "activated" if target.is_active else "deactivated"
+        messages.success(request, f"User '{target.get_full_name()}' {status}.")
         return redirect('users:index')
-
-
-# @method_decorator(login_required(login_url='/admin/login/'), name='dispatch')
-# class ChangePasswordView(View):
-#     """Logged-in system user apna password change kare"""
-#     template_name = 'users/change_password.html'
-
-#     def get(self, request):
-#         form = AdminPasswordChangeForm(user=request.user)
-#         return render(request, self.template_name, {'form': form})
-
-#     def post(self, request):
-#         form = AdminPasswordChangeForm(user=request.user, data=request.POST)
-#         if form.is_valid():
-#             request.user.set_password(form.cleaned_data['new_password'])
-#             request.user.save()
-#             # Session update - logout nahi hoga
-#             update_session_auth_hash(request, request.user)
-#             messages.success(request, "Password changed successfully.")
-#             return redirect('core:admin_dashboard')
-#         return render(request, self.template_name, {'form': form})

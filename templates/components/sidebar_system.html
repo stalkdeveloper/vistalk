@@ -1,61 +1,65 @@
+{% load rbac_tags %}
+<div class="adm-sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <a href="{% url 'accounts:home' %}" class="logo">V<span>istalk</span></a>
+  </div>
 
-<div class="sys-sidebar" id="sidebar">
-    <div class="sidebar-logo">
-        <a href="{% url 'accounts:home' %}" class="logo">V<span>istalk</span></a>
-    </div>
-    
-    <div class="sidebar-nav">
-        <div class="nav-section-label">MAIN</div>
-        
-        <!-- Dashboard Link -->
-        <a href="{% url 'core:admin_dashboard' %}" 
-           class="sidebar-link {% if request.resolver_match.url_name == 'admin_dashboard' %}active{% endif %}">
-            <i class="fas fa-chart-pie"></i>
-            <span>Dashboard</span>
-        </a>
-        
-        <!-- Users Link -->
-        <a href="{% url 'users:index' %}" 
-           class="sidebar-link {% if 'admin/users' in request.path %}active{% endif %}">
-            <i class="fas fa-users"></i>
-            <span>Users</span>
-        </a>
-        
-        <!-- Roles & Permissions Link -->
-        <a href="javascript:;" 
-           class="sidebar-link {% if 'roles' in request.path %}active{% endif %}">
-            <i class="fas fa-lock"></i>
-            <span>Roles & Permissions</span>
-        </a>
-        
-        <div class="nav-section-label">SYSTEM</div>
-        
-        <!-- Settings Link -->
-        <a href="javascript:;" 
-           class="sidebar-link {% if 'settings' in request.path %}active{% endif %}">
-            <i class="fas fa-cog"></i>
-            <span>Settings</span>
-        </a>
-        
-        <!-- Audit Logs Link -->
-        <a href="javascript:;" 
-           class="sidebar-link {% if 'audit' in request.path %}active{% endif %}">
-            <i class="fas fa-history"></i>
-            <span>Audit Logs</span>
-        </a>
-        
-        <!-- Analytics Link -->
-        <a href="javascript:;" 
-           class="sidebar-link {% if 'analytics' in request.path %}active{% endif %}">
-            <i class="fas fa-chart-line"></i>
-            <span>Analytics</span>
-        </a>
-    </div>
-    
-    <div class="sidebar-footer">
-        <a href="{% url 'accounts:logout' %}" class="sidebar-link">
-            <i class="fas fa-sign-out-alt"></i>
-            <span>Logout</span>
-        </a>
-    </div>
+  <div class="sidebar-nav">
+    <span class="nav-section-label">Main</span>
+
+    <a href="{% url 'core:admin_dashboard' %}"
+       class="sidebar-link {% if request.resolver_match.url_name == 'admin_dashboard' %}active{% endif %}">
+      <i class="fas fa-chart-pie"></i>
+      <span>Dashboard</span>
+    </a>
+
+    {% if request.user|has_perm:"can_view_users" %}
+    <a href="{% url 'users:index' %}"
+       class="sidebar-link {% if 'admin/users' in request.path %}active{% endif %}">
+      <i class="fas fa-users"></i>
+      <span>Users</span>
+    </a>
+    {% endif %}
+
+    {% if request.user|has_perm:"can_view_roles" %}
+    <a href="{% url 'roles:index' %}"
+       class="sidebar-link {% if 'admin/roles' in request.path %}active{% endif %}">
+      <i class="fas fa-shield-alt"></i>
+      <span>Roles & Permissions</span>
+    </a>
+    {% endif %}
+
+    <a href="javascript:;"
+       class="sidebar-link {% if 'admin/tasks' in request.path %}active{% endif %}">
+      <i class="fas fa-tasks"></i>
+      <span>Tasks</span>
+    </a>
+
+    <span class="nav-section-label">System</span>
+
+    <a href="javascript:;"
+       class="sidebar-link {% if 'settings' in request.path %}active{% endif %}">
+      <i class="fas fa-cog"></i>
+      <span>Settings</span>
+    </a>
+
+    <a href="javascript:;"
+       class="sidebar-link {% if 'audit' in request.path %}active{% endif %}">
+      <i class="fas fa-history"></i>
+      <span>Audit Logs</span>
+    </a>
+
+    <a href="javascript:;"
+       class="sidebar-link {% if 'analytics' in request.path %}active{% endif %}">
+      <i class="fas fa-chart-line"></i>
+      <span>Analytics</span>
+    </a>
+  </div>
+
+  <div class="sidebar-footer">
+    <a href="{% url 'accounts:logout' %}" class="sidebar-link">
+      <i class="fas fa-sign-out-alt"></i>
+      <span>Logout</span>
+    </a>
+  </div>
 </div>

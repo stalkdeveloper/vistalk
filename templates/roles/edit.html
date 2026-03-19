@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Edit Role - Vistalk Admin{% endblock %}
+{% block css %}<link rel="stylesheet" href="{% static 'css/admin.css' %}">{% endblock %}
+{% block body_class %}adm-body{% endblock %}
+
+{% block content %}
+<div class="adm-wrapper">
+  {% include 'components/sidebar_system.html' %}
+
+  <div class="adm-main" id="admMain">
+    {% include 'components/navbar_system.html' %}
+
+    <div class="adm-content">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Edit Role</h1>
+          <p class="page-subtitle">{{ role.display_name }}</p>
+        </div>
+        <div class="page-actions">
+          <a href="{% url 'roles:index' %}" class="adm-btn adm-btn-outline">
+            <i class="fas fa-arrow-left"></i> Back to Roles
+          </a>
+        </div>
+      </div>
+
+      <form method="POST" novalidate>
+        {% csrf_token %}
+
+        <!-- Role Details -->
+        <div class="adm-card">
+          <div class="adm-card-head">
+            <div class="adm-card-title"><i class="fas fa-shield-alt"></i> Role Details</div>
+          </div>
+
+          <div class="adm-form-row adm-form-row-2">
+            <div class="adm-form-group">
+              <label class="adm-label">Role Name (slug) <span class="req">*</span></label>
+              <input type="text" name="name" class="adm-input"
+                value="{{ old.name|default:role.name }}">
+              {% if errors.name %}
+              <p class="adm-form-error"><i class="fas fa-exclamation-circle"></i> {{ errors.name }}</p>
+              {% endif %}
+              <p class="adm-form-hint">Lowercase, underscores allowed.</p>
+            </div>
+            <div class="adm-form-group">
+              <label class="adm-label">Display Name <span class="req">*</span></label>
+              <input type="text" name="display_name" class="adm-input"
+                value="{{ old.display_name|default:role.display_name }}">
+              {% if errors.display_name %}
+              <p class="adm-form-error"><i class="fas fa-exclamation-circle"></i> {{ errors.display_name }}</p>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="adm-form-group">
+            <label class="adm-label">Description</label>
+            <textarea name="description" class="adm-textarea">{{ old.description|default:role.description }}</textarea>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:10px">
+            <input type="checkbox" name="is_default" id="id_is_default"
+              {% if old.is_default or role.is_default and not old %}checked{% endif %}
+              style="width:16px;height:16px;accent-color:var(--brand)">
+            <label for="id_is_default" style="font-size:14px;color:var(--adm-ink-soft);cursor:pointer">
+              Set as default role for new platform users
+            </label>
+          </div>
+        </div>
+
+        <!-- Permissions -->
+        <div class="adm-card" style="margin-top:var(--sp-5)">
+          <div class="adm-card-head">
+            <div class="adm-card-title"><i class="fas fa-key"></i> Permissions</div>
+            <div style="display:flex;gap:var(--sp-3)">
+              <button type="button" onclick="selectAll()" class="adm-btn adm-btn-ghost adm-btn-sm">
+                Select All
+              </button>
+              <button type="button" onclick="selectNone()" class="adm-btn adm-btn-ghost adm-btn-sm">
+                Clear All
+              </button>
+            </div>
+          </div>
+
+          {% for group_name, perms in perm_groups.items %}
+          <div class="perm-section">
+            <div class="perm-section-head">{{ group_name|capfirst }}</div>
+            <div class="perm-grid">
+              {% for perm in perms %}
+              <label class="perm-item {% if perm.id in assigned_ids %}checked{% endif %}">
+                <input type="checkbox" name="permissions" value="{{ perm.id }}"
+                  {% if perm.id in assigned_ids %}checked{% endif %}
+                  onchange="this.closest('.perm-item').classList.toggle('checked', this.checked)">
+                <span>{{ perm.display_name }}</span>
+              </label>
+              {% endfor %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+
+        <!-- Actions -->
+        <div class="adm-form-actions">
+          <button type="submit" class="adm-btn adm-btn-primary">
+            <i class="fas fa-save"></i> Save Changes
+          </button>
+          <a href="{% url 'roles:index' %}" class="adm-btn adm-btn-outline">Cancel</a>
+        </div>
+
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block js %}
+<script>
+function selectAll() {
+  document.querySelectorAll('.perm-item input[type="checkbox"]').forEach(function(cb){
+    cb.checked = true;
+    cb.closest('.perm-item').classList.add('checked');
+  });
+}
+function selectNone() {
+  document.querySelectorAll('.perm-item input[type="checkbox"]').forEach(function(cb){
+    cb.checked = false;
+    cb.closest('.perm-item').classList.remove('checked');
+  });
+}
+</script>
+{% endblock %}

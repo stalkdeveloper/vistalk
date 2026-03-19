@@ -1,0 +1,128 @@
+{% extends 'base.html' %}
+{% load static rbac_tags %}
+{% block title %}Roles - Vistalk Admin{% endblock %}
+{% block css %}<link rel="stylesheet" href="{% static 'css/admin.css' %}">{% endblock %}
+{% block body_class %}adm-body{% endblock %}
+
+{% block content %}
+<div class="adm-wrapper">
+  {% include 'components/sidebar_system.html' %}
+
+  <div class="adm-main" id="admMain">
+    {% include 'components/navbar_system.html' %}
+
+    <div class="adm-content">
+
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Roles & Permissions</h1>
+          <p class="page-subtitle">{{ total }} role{{ total|pluralize }} · {{ perm_count }} permission{{ perm_count|pluralize }}</p>
+        </div>
+        {% if request.user|has_perm:"can_create_roles" %}
+        <div class="page-actions">
+          <a href="{% url 'roles:create' %}" class="adm-btn adm-btn-primary">
+            <i class="fas fa-plus"></i> New Role
+          </a>
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- Default role callout -->
+      {% if default_role %}
+      <div class="adm-alert adm-alert-ok" style="margin-bottom:var(--sp-5)">
+        <i class="fas fa-info-circle"></i>
+        <div>Default role for new users: <strong>{{ default_role.display_name }}</strong></div>
+      </div>
+      {% endif %}
+
+      <div class="adm-table-wrap">
+        <table class="adm-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Role</th>
+              <th>Description</th>
+              <th>Permissions</th>
+              <th>Users</th>
+              <th>Default</th>
+              <th class="actions">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for role in roles %}
+            <tr>
+              <td style="color:var(--adm-ink-muted);font-size:12px">{{ forloop.counter }}</td>
+              <td>
+                <div style="font-weight:600;color:var(--adm-ink)">{{ role.display_name }}</div>
+                <div style="font-size:11px;color:var(--adm-ink-muted);font-family:var(--font-mono)">{{ role.name }}</div>
+              </td>
+              <td style="font-size:13px;color:var(--adm-ink-muted);max-width:240px">
+                {{ role.description|default:"-" }}
+              </td>
+              <td>
+                <div style="display:flex;flex-wrap:wrap;gap:4px;max-width:300px">
+                  {% for perm in role.permissions.all|slice:":5" %}
+                    <span class="tag tag-mono">{{ perm.name }}</span>
+                  {% empty %}
+                    <span style="color:var(--adm-ink-muted);font-size:12px">None</span>
+                  {% endfor %}
+                  {% if role.permissions.count > 5 %}
+                    <span class="tag tag-muted">+{{ role.permissions.count|add:"-5" }} more</span>
+                  {% endif %}
+                </div>
+              </td>
+              <td>
+                <span class="tag {% if role.user_roles.count > 0 %}tag-orange{% else %}tag-muted{% endif %}">
+                  {{ role.user_roles.count }}
+                </span>
+              </td>
+              <td>
+                {% if role.is_default %}
+                  <span class="tag tag-green"><i class="fas fa-check"></i> Yes</span>
+                {% else %}
+                  <span style="color:var(--adm-ink-muted);font-size:12px">-</span>
+                {% endif %}
+              </td>
+              <td class="actions">
+                <div class="table-action-btns">
+                  {% if request.user|has_perm:"can_edit_roles" %}
+                  <a href="{% url 'roles:edit' role.pk %}"
+                     class="adm-btn adm-btn-ghost adm-btn-sm adm-btn-icon"
+                     title="Edit">
+                    <i class="fas fa-pencil-alt"></i>
+                  </a>
+                  {% endif %}
+                  {% if request.user|has_perm:"can_delete_roles" %}
+                  <form method="POST" action="{% url 'roles:delete' role.pk %}"
+                        style="display:inline"
+                        onsubmit="return confirm('Delete role \'{{ role.display_name }}\'? This cannot be undone.')">
+                    {% csrf_token %}
+                    <button type="submit"
+                      class="adm-btn adm-btn-danger adm-btn-sm adm-btn-icon"
+                      title="Delete">
+                      <i class="fas fa-trash-alt"></i>
+                    </button>
+                  </form>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="7">
+                <div class="empty-state">
+                  <div class="empty-state-icon">🛡️</div>
+                  <h3>No roles yet</h3>
+                  <p>Create your first role to assign permissions to users.</p>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}

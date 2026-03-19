@@ -1,490 +1,172 @@
 {% extends 'base.html' %}
-{% load static %}
+{% load static rbac_tags %}
 {% block title %}Users - Vistalk Admin{% endblock %}
-{% block body_class %}sys-layout{% endblock %}
-
-{% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/system.css' %}">
-<style>
-    /* Page specific styles using CSS variables */
-    .page-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        margin-bottom: 28px;
-        flex-wrap: wrap;
-        gap: 16px;
-    }
-    
-    .page-title {
-        font-size: 26px;
-        font-weight: 800;
-        letter-spacing: -0.5px;
-        color: var(--sys-text);
-    }
-    
-    .page-subtitle {
-        color: var(--sys-muted);
-        font-size: 14px;
-        margin-top: 4px;
-    }
-    
-    .btn-create {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 10px 20px;
-        background: var(--brand-orange);
-        color: white;
-        border-radius: 40px;
-        text-decoration: none;
-        font-weight: 600;
-        font-size: 14px;
-        transition: all 0.2s;
-    }
-    
-    .btn-create:hover {
-        background: var(--brand-dark);
-        transform: translateY(-1px);
-    }
-
-    /* Stats Row */
-    .stats-row {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 16px;
-        margin-bottom: 24px;
-    }
-    
-    .stat-card {
-        background: var(--sys-surface);
-        border: 1px solid var(--sys-border);
-        border-radius: 14px;
-        padding: 20px;
-    }
-    
-    .stat-label {
-        font-size: 12px;
-        color: var(--sys-muted);
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        margin-bottom: 8px;
-    }
-    
-    .stat-val {
-        font-size: 30px;
-        font-weight: 800;
-        color: var(--brand-orange);
-        font-family: var(--font-display);
-    }
-
-    /* Filters */
-    .filters {
-        display: flex;
-        gap: 12px;
-        margin-bottom: 20px;
-        flex-wrap: wrap;
-    }
-    
-    .filter-input {
-        padding: 9px 16px;
-        background: var(--sys-surface-2);
-        border: 1px solid var(--sys-border);
-        border-radius: 10px;
-        color: var(--sys-text);
-        font-size: 14px;
-        outline: none;
-        min-width: 220px;
-        font-family: inherit;
-    }
-    
-    .filter-input:focus {
-        border-color: var(--brand-orange);
-    }
-    
-    .filter-input::placeholder {
-        color: var(--sys-muted);
-    }
-    
-    .filter-select {
-        padding: 9px 16px;
-        background: var(--sys-surface-2);
-        border: 1px solid var(--sys-border);
-        border-radius: 10px;
-        color: var(--sys-text);
-        font-size: 14px;
-        outline: none;
-        font-family: inherit;
-        cursor: pointer;
-    }
-    
-    .filter-select:focus {
-        border-color: var(--brand-orange);
-    }
-    
-    .btn-filter {
-        padding: 9px 20px;
-        background: var(--sys-surface-2);
-        border: 1px solid var(--sys-border);
-        border-radius: 10px;
-        color: var(--sys-muted);
-        font-size: 14px;
-        cursor: pointer;
-        font-family: inherit;
-        transition: all 0.2s;
-    }
-    
-    .btn-filter:hover {
-        border-color: var(--brand-orange);
-        color: var(--brand-orange);
-    }
-
-    /* Table */
-    .table-wrap {
-        background: var(--sys-surface);
-        border: 1px solid var(--sys-border);
-        border-radius: 16px;
-        overflow: hidden;
-    }
-    
-    table {
-        width: 100%;
-        border-collapse: collapse;
-    }
-    
-    thead {
-        background: var(--sys-surface-2);
-    }
-    
-    th {
-        padding: 14px 20px;
-        text-align: left;
-        font-size: 11px;
-        font-weight: 700;
-        color: var(--sys-muted);
-        text-transform: uppercase;
-        letter-spacing: 1px;
-    }
-    
-    td {
-        padding: 16px 20px;
-        border-top: 1px solid var(--sys-border);
-        font-size: 14px;
-        color: var(--sys-text-soft);
-        vertical-align: middle;
-    }
-    
-    tr:hover td {
-        background: rgba(255,138,92,0.03);
-    }
-
-    .user-info {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-    }
-    
-    .user-avatar {
-        width: 36px;
-        height: 36px;
-        border-radius: 50%;
-        background: var(--brand-orange);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-weight: 700;
-        font-size: 14px;
-        flex-shrink: 0;
-    }
-    
-    .user-name {
-        font-weight: 600;
-        color: var(--sys-text);
-        font-size: 14px;
-    }
-    
-    .user-email {
-        font-size: 12px;
-        color: var(--sys-muted);
-    }
-
-    .badge {
-        display: inline-block;
-        padding: 3px 10px;
-        border-radius: 20px;
-        font-size: 11px;
-        font-weight: 600;
-    }
-    
-    .badge-system {
-        background: rgba(255,138,92,0.15);
-        color: var(--brand-orange);
-    }
-    
-    .badge-platform {
-        background: rgba(99,179,237,0.15);
-        color: #63b3ed;
-    }
-    
-    .badge-active {
-        background: rgba(72,187,120,0.15);
-        color: #68d391;
-    }
-    
-    .badge-inactive {
-        background: rgba(252,129,129,0.15);
-        color: #fc8181;
-    }
-
-    .role-tags {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 4px;
-    }
-    
-    .role-tag {
-        background: var(--sys-surface-2);
-        color: var(--sys-muted);
-        padding: 2px 8px;
-        border-radius: 6px;
-        font-size: 11px;
-    }
-
-    .actions {
-        display: flex;
-        gap: 6px;
-    }
-    
-    .btn-edit {
-        padding: 6px 14px;
-        background: var(--sys-surface-2);
-        color: var(--sys-muted);
-        border-radius: 8px;
-        text-decoration: none;
-        font-size: 13px;
-        font-weight: 500;
-        transition: all 0.2s;
-        border: none;
-        cursor: pointer;
-        font-family: inherit;
-    }
-    
-    .btn-edit:hover {
-        background: rgba(255,138,92,0.15);
-        color: var(--brand-orange);
-    }
-    
-    .btn-toggle {
-        padding: 6px 14px;
-        background: var(--sys-surface-2);
-        color: var(--sys-muted);
-        border-radius: 8px;
-        font-size: 13px;
-        font-weight: 500;
-        transition: all 0.2s;
-        border: none;
-        cursor: pointer;
-        font-family: inherit;
-    }
-    
-    .btn-toggle:hover {
-        background: rgba(72,187,120,0.15);
-        color: #68d391;
-    }
-    
-    .btn-delete {
-        padding: 6px 14px;
-        background: var(--sys-surface-2);
-        color: var(--sys-muted);
-        border-radius: 8px;
-        font-size: 13px;
-        font-weight: 500;
-        transition: all 0.2s;
-        border: none;
-        cursor: pointer;
-        font-family: inherit;
-    }
-    
-    .btn-delete:hover {
-        background: rgba(252,129,129,0.15);
-        color: #fc8181;
-    }
-
-    .empty-state {
-        text-align: center;
-        padding: 60px 20px;
-        color: var(--sys-muted);
-    }
-    
-    .empty-state .empty-icon {
-        font-size: 48px;
-        margin-bottom: 16px;
-    }
-
-    @media (max-width: 768px) {
-        .stats-row {
-            grid-template-columns: 1fr;
-        }
-        
-        .filters {
-            flex-direction: column;
-        }
-        
-        .filter-input {
-            width: 100%;
-        }
-        
-        .actions {
-            flex-direction: column;
-        }
-    }
-</style>
-{% endblock %}
+{% block css %}<link rel="stylesheet" href="{% static 'css/admin.css' %}">{% endblock %}
+{% block body_class %}adm-body{% endblock %}
 
 {% block content %}
-<div class="sys-wrapper">
-    {% include 'components/sidebar_system.html' %}
-    <div class="sys-main" id="sysMain">
-        {% include 'components/navbar_system.html' %}
-        <div class="sys-content">
+<div class="adm-wrapper">
+  {% include 'components/sidebar_system.html' %}
 
-            <!-- Header -->
-            <div class="page-header">
-                <div>
-                    <h1 class="page-title">Users</h1>
-                    <p class="page-subtitle">Manage all platform and system users</p>
-                </div>
-                <a href="{% url 'users:create' %}" class="btn-create">
-                    <i class="fas fa-plus"></i> Create User
-                </a>
-            </div>
+  <div class="adm-main" id="admMain">
+    {% include 'components/navbar_system.html' %}
 
-            <!-- Stats -->
-            <div class="stats-row">
-                <div class="stat-card">
-                    <div class="stat-label">Total Users</div>
-                    <div class="stat-val">{{ total }}</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">Platform Users</div>
-                    <div class="stat-val">{{ platform_count }}</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">Staff Users</div>
-                    <div class="stat-val">{{ system_count }}</div>
-                </div>
-            </div>
+    <div class="adm-content">
 
-            <!-- Filters -->
-            <form method="GET">
-                <div class="filters">
-                    <input class="filter-input" type="text" name="search"
-                           placeholder="🔍 Search by name or email..."
-                           value="{{ search }}">
-                    <select class="filter-select" name="user_type">
-                        <option value="">All Types</option>
-                        <option value="platform" {% if user_type_filter == 'platform' %}selected{% endif %}>Platform</option>
-                        <option value="system"   {% if user_type_filter == 'system' %}selected{% endif %}>System</option>
-                    </select>
-                    <button type="submit" class="btn-filter">
-                        <i class="fas fa-filter"></i> Filter
-                    </button>
-                    {% if search or user_type_filter %}
-                    <a href="{% url 'users:index' %}" class="btn-filter">
-                        <i class="fas fa-times"></i> Clear
-                    </a>
-                    {% endif %}
-                </div>
-            </form>
-
-            <!-- Table -->
-            <div class="table-wrap">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>User</th>
-                            <th>Type</th>
-                            <th>Roles</th>
-                            <th>Status</th>
-                            <th>Joined</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for u in users %}
-                        <tr>
-                            <td>
-                                <div class="user-info">
-                                    <div class="user-avatar">{{ u.username|first|upper }}</div>
-                                    <div>
-                                        <div class="user-name">{{ u.username }}</div>
-                                        <div class="user-email">{{ u.email }}</div>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="badge {% if u.user_type == 'system' %}badge-system{% else %}badge-platform{% endif %}">
-                                    {{ u.user_type|title }}
-                                </span>
-                            </td>
-                            <td>
-                                <div class="role-tags">
-                                    {% for ur in u.user_roles.all %}
-                                        <span class="role-tag">{{ ur.role.display_name }}</span>
-                                    {% empty %}
-                                        <span style="color:var(--sys-muted);font-size:12px">No roles</span>
-                                    {% endfor %}
-                                </div>
-                            </td>
-                            <td>
-                                <span class="badge {% if u.is_active %}badge-active{% else %}badge-inactive{% endif %}">
-                                    {% if u.is_active %}Active{% else %}Inactive{% endif %}
-                                </span>
-                            </td>
-                            <td style="color:var(--sys-muted);font-size:13px">{{ u.date_joined|date:"M d, Y" }}</td>
-                            <td>
-                                <div class="actions">
-                                    <a href="{% url 'users:edit' u.pk %}" class="btn-edit">
-                                        <i class="fas fa-edit"></i> Edit
-                                    </a>
-
-                                    {% if u != request.user %}
-                                    <form method="POST" action="{% url 'users:toggle' u.pk %}" style="display:inline">
-                                        {% csrf_token %}
-                                        <button type="submit" class="btn-toggle">
-                                            <i class="fas {% if u.is_active %}fa-ban{% else %}fa-check-circle{% endif %}"></i>
-                                            {% if u.is_active %}Deactivate{% else %}Activate{% endif %}
-                                        </button>
-                                    </form>
-
-                                    <form method="POST" action="{% url 'users:delete' u.pk %}"
-                                          style="display:inline"
-                                          onsubmit="return confirm('Delete {{ u.username }}? This cannot be undone.')">
-                                        {% csrf_token %}
-                                        <button type="submit" class="btn-delete">
-                                            <i class="fas fa-trash"></i> Delete
-                                        </button>
-                                    </form>
-                                    {% endif %}
-                                </div>
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="6">
-                                <div class="empty-state">
-                                    <div class="empty-icon">👤</div>
-                                    <p>No users found.</p>
-                                </div>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-
+      <!-- Page Header -->
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Users</h1>
+          <p class="page-subtitle">
+            {{ total }} total &nbsp;·&nbsp;
+            {{ platform_count }} platform &nbsp;·&nbsp;
+            {{ system_count }} staff
+          </p>
         </div>
+        {% if can_create %}
+        <div class="page-actions">
+          <a href="{% url 'users:create' %}" class="adm-btn adm-btn-primary">
+            <i class="fas fa-plus"></i> New User
+          </a>
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- Toolbar -->
+      <form method="GET" class="adm-toolbar">
+        <div class="adm-search-wrap">
+          <i class="fas fa-search"></i>
+          <input type="text" name="search" class="adm-search"
+            placeholder="Search by email or username…"
+            value="{{ search }}">
+        </div>
+        <select name="user_type" class="adm-filter-select" onchange="this.form.submit()">
+          <option value="">All Types</option>
+          <option value="platform" {% if user_type_filter == 'platform' %}selected{% endif %}>Platform</option>
+          <option value="system"   {% if user_type_filter == 'system' %}selected{% endif %}>System</option>
+        </select>
+        <button type="submit" class="adm-btn adm-btn-outline">
+          <i class="fas fa-filter"></i> Filter
+        </button>
+        {% if search or user_type_filter %}
+        <a href="{% url 'users:index' %}" class="adm-btn adm-btn-ghost">
+          <i class="fas fa-times"></i> Clear
+        </a>
+        {% endif %}
+      </form>
+
+      <!-- Table -->
+      <div class="adm-table-wrap">
+        <table class="adm-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Type</th>
+              <th>Role</th>
+              <th>Status</th>
+              <th>Joined</th>
+              {% if can_edit or can_delete %}
+              <th class="actions">Actions</th>
+              {% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for u in users %}
+            <tr>
+              <td style="color:var(--adm-ink-muted);font-size:12px">{{ forloop.counter }}</td>
+              <td>
+                <div style="display:flex;align-items:center;gap:10px">
+                  <div style="width:32px;height:32px;border-radius:50%;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:700;font-size:13px;flex-shrink:0">
+                    {{ u.get_full_name|first|upper|default:u.username|first|upper }}
+                  </div>
+                  <div>
+                    <div style="font-weight:600;color:var(--adm-ink);font-size:13.5px">
+                      {{ u.get_full_name|default:u.username }}
+                    </div>
+                    <div style="font-size:11px;color:var(--adm-ink-muted)">@{{ u.username }}</div>
+                  </div>
+                </div>
+              </td>
+              <td>{{ u.email }}</td>
+              <td>
+                {% if u.user_type == 'system' %}
+                  <span class="tag tag-orange">Staff</span>
+                {% else %}
+                  <span class="tag tag-muted">Platform</span>
+                {% endif %}
+              </td>
+              <td>
+                {% for ur in u.user_roles.all %}
+                  <span class="tag tag-muted" style="font-size:11px">{{ ur.role.display_name }}</span>
+                {% empty %}
+                  <span style="color:var(--adm-ink-muted);font-size:12px">-</span>
+                {% endfor %}
+              </td>
+              <td>
+                {% if u.is_active %}
+                  <span class="tag tag-green">Active</span>
+                {% else %}
+                  <span class="tag tag-red">Inactive</span>
+                {% endif %}
+              </td>
+              <td style="font-size:12px;color:var(--adm-ink-muted)">
+                {{ u.date_joined|date:"M d, Y" }}
+              </td>
+              {% if can_edit or can_delete %}
+              <td class="actions">
+                <div class="table-action-btns">
+                  {% if can_edit %}
+                  <a href="{% url 'users:edit' u.pk %}"
+                     class="adm-btn adm-btn-ghost adm-btn-sm adm-btn-icon"
+                     title="Edit">
+                    <i class="fas fa-pencil-alt"></i>
+                  </a>
+                  {% if u != request.user and not u.is_superuser %}
+                  <form method="POST" action="{% url 'users:toggle' u.pk %}" style="display:inline">
+                    {% csrf_token %}
+                    <button type="submit"
+                      class="adm-btn adm-btn-ghost adm-btn-sm adm-btn-icon"
+                      title="{% if u.is_active %}Deactivate{% else %}Activate{% endif %}">
+                      <i class="fas {% if u.is_active %}fa-toggle-on{% else %}fa-toggle-off{% endif %}"></i>
+                    </button>
+                  </form>
+                  {% endif %}
+                  {% endif %}
+
+                  {% if can_delete and u != request.user and not u.is_superuser %}
+                  <form method="POST" action="{% url 'users:delete' u.pk %}"
+                        style="display:inline"
+                        onsubmit="return confirm('Delete user {{ u.get_full_name|default:u.username }}? This cannot be undone.')">
+                    {% csrf_token %}
+                    <button type="submit"
+                      class="adm-btn adm-btn-danger adm-btn-sm adm-btn-icon"
+                      title="Delete">
+                      <i class="fas fa-trash-alt"></i>
+                    </button>
+                  </form>
+                  {% endif %}
+                </div>
+              </td>
+              {% endif %}
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="8">
+                <div class="empty-state">
+                  <div class="empty-state-icon">👥</div>
+                  <h3>No users found</h3>
+                  <p>Try adjusting your search or filters.</p>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div><!-- /table-wrap -->
+
     </div>
+  </div>
 </div>
 {% endblock %}

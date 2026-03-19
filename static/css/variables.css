@@ -1,108 +1,195 @@
-/* variables.css - Global CSS Variables with Dark/Light Mode Support */
+/* ============================================================
+   variables.css - Design tokens for Vistalk
+   Light / dark theme support via [data-theme="dark"]
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Sora:wght@400;500;600;700&display=swap');
 
 :root {
-    /* Brand Colors -保持不变 */
-    --brand-orange: #ff8a5c;
-    --brand-dark: #ff6f3c;
-    --brand-light: #FEF3EC;
-    
-    /* Light Mode Colors (Default) */
-    --bg-primary: #ffffff;
-    --bg-secondary: #fafafa;
-    --bg-tertiary: #f5f5f5;
-    --text-primary: #1a1a1a;
-    --text-secondary: #4a4a4a;
-    --text-muted: #6b6b6b;
-    --border-color: #eaeaea;
-    --card-bg: #ffffff;
-    --card-border: #eaeaea;
-    --hover-bg: #f5f5f5;
-    --shadow-color: rgba(0, 0, 0, 0.05);
-    --input-bg: #fafafa;
-    --input-border: #eaeaea;
-    --navbar-bg: rgba(255, 255, 255, 0.9);
-    --navbar-border: rgba(234, 234, 234, 0.5);
-    
-    /* System Colors (for admin) */
-    --sys-bg: #f5f5f5;
-    --sys-surface: #ffffff;
-    --sys-surface-2: #fafafa;
-    --sys-border: #eaeaea;
-    --sys-text: #1a1a1a;
-    --sys-text-soft: #4a4a4a;
-    --sys-muted: #6b6b6b;
-    
-    /* Utility Colors */
-    --success: #10b981;
-    --error: #ef4444;
-    --warning: #f59e0b;
-    --info: #3b82f6;
-    
-    /* Spacing */
-    --space-xs: 4px;
-    --space-sm: 8px;
-    --space-md: 16px;
-    --space-lg: 24px;
-    --space-xl: 32px;
-    --space-2xl: 48px;
-    
-    /* Typography */
-    --font-display: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    
-    /* Borders & Shadows */
-    --radius-sm: 8px;
-    --radius: 12px;
-    --radius-lg: 24px;
-    --shadow-sm: 0 2px 4px rgba(0,0,0,0.05);
-    --shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
-    --shadow-lg: 0 20px 25px -5px rgba(0,0,0,0.05), 0 10px 10px -5px rgba(0,0,0,0.02);
-    --shadow-xl: 0 25px 50px -12px rgba(0,0,0,0.25);
+    /* ── Brand ───────────────────────────────── */
+    --brand: #ff6b35;
+    --brand-hover: #e8541f;
+    --brand-soft: rgba(255, 107, 53, 0.12);
+    --brand-glow: rgba(255, 107, 53, 0.25);
+
+    /* ── Surface (light) ─────────────────────── */
+    --bg: #f7f6f3;
+    --bg-2: #ffffff;
+    --bg-3: #f0ede8;
+    --surface: #ffffff;
+    --surface-2: #faf9f7;
+    --surface-3: #f4f2ef;
+
+    /* ── Text (light) ────────────────────────── */
+    --ink: #1a1714;
+    --ink-soft: #3d3a36;
+    --ink-muted: #7a756e;
+    --ink-faint: #b0aa9f;
+
+    /* ── Border (light) ─────────────────────── */
+    --line: #e8e4de;
+    --line-strong: #d4cfc8;
+
+    /* ── Navbar ──────────────────────────────── */
+    --nav-bg: rgba(247, 246, 243, 0.88);
+    --nav-border: rgba(232, 228, 222, 0.6);
+
+    /* ── Input (light) ───────────────────────── */
+    --input-bg: #fdfcfb;
+    --input-border: #dedad4;
+    --input-focus: #ff6b35;
+
+    /* ── Admin surface (light) ───────────────── */
+    --adm-bg: #f4f2ef;
+    --adm-surface: #ffffff;
+    --adm-surface-2: #f9f8f6;
+    --adm-border: #e8e4de;
+    --adm-ink: #1a1714;
+    --adm-ink-soft: #3d3a36;
+    --adm-ink-muted: #7a756e;
+
+    /* ── Status ──────────────────────────────── */
+    --ok: #16a34a;
+    --ok-soft: rgba(22, 163, 74, 0.10);
+    --warn: #d97706;
+    --warn-soft: rgba(217, 119, 6, 0.10);
+    --err: #dc2626;
+    --err-soft: rgba(220, 38, 38, 0.10);
+    --info: #2563eb;
+    --info-soft: rgba(37, 99, 235, 0.10);
+
+    /* ── Shadows ─────────────────────────────── */
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.06);
+    --shadow: 0 4px 16px rgba(0, 0, 0, 0.07);
+    --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.09);
+    --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.10);
+    --shadow-xl: 0 24px 64px rgba(0, 0, 0, 0.14);
+
+    /* ── Radius ──────────────────────────────── */
+    --r-xs: 4px;
+    --r-sm: 8px;
+    --r: 12px;
+    --r-md: 16px;
+    --r-lg: 24px;
+    --r-xl: 32px;
+    --r-full: 9999px;
+
+    /* ── Spacing ─────────────────────────────── */
+    --sp-1: 4px;
+    --sp-2: 8px;
+    --sp-3: 12px;
+    --sp-4: 16px;
+    --sp-5: 20px;
+    --sp-6: 24px;
+    --sp-8: 32px;
+    --sp-10: 40px;
+    --sp-12: 48px;
+    --sp-16: 64px;
+    --sp-20: 80px;
+
+    /* ── Typography ──────────────────────────── */
+    --font-display: 'Sora', sans-serif;
+    --font-body: 'Inter', sans-serif;
+    --font-mono: 'Fira Code', monospace;
+
+    /* ── Transitions ─────────────────────────── */
+    --ease: cubic-bezier(0.16, 1, 0.3, 1);
+    --t-fast: 120ms var(--ease);
+    --t: 200ms var(--ease);
+    --t-slow: 320ms var(--ease);
 }
 
-/* Dark Mode Colors */
+/* ── Dark mode overrides ───────────────────────────────────── */
 [data-theme="dark"] {
-    --bg-primary: #0f0f0f;
-    --bg-secondary: #181818;
-    --bg-tertiary: #222222;
-    --text-primary: #ffffff;
-    --text-secondary: #e0e0e0;
-    --text-muted: #888888;
-    --border-color: #2a2a2a;
-    --card-bg: #181818;
-    --card-border: #2a2a2a;
-    --hover-bg: #222222;
-    --shadow-color: rgba(0, 0, 0, 0.3);
-    --input-bg: #222222;
-    --input-border: #2a2a2a;
-    --navbar-bg: rgba(15, 15, 15, 0.9);
-    --navbar-border: rgba(42, 42, 42, 0.5);
-    
-    /* System Colors for admin in dark mode */
-    --sys-bg: #0f0f0f;
-    --sys-surface: #181818;
-    --sys-surface-2: #222222;
-    --sys-border: #2a2a2a;
-    --sys-text: #ffffff;
-    --sys-text-soft: #e0e0e0;
-    --sys-muted: #888888;
+    --bg: #111110;
+    --bg-2: #18181b;
+    --bg-3: #1c1c1f;
+    --surface: #1c1c1f;
+    --surface-2: #222226;
+    --surface-3: #28282e;
+
+    --ink: #f5f4f0;
+    --ink-soft: #c8c4bc;
+    --ink-muted: #7a756e;
+    --ink-faint: #4a4642;
+
+    --line: #2a2a2e;
+    --line-strong: #38383e;
+
+    --nav-bg: rgba(17, 17, 16, 0.90);
+    --nav-border: rgba(42, 42, 46, 0.6);
+
+    --input-bg: #1c1c1f;
+    --input-border: #2e2e34;
+
+    --adm-bg: #111110;
+    --adm-surface: #18181b;
+    --adm-surface-2: #1c1c1f;
+    --adm-border: #2a2a2e;
+    --adm-ink: #f5f4f0;
+    --adm-ink-soft: #c8c4bc;
+    --adm-ink-muted: #7a756e;
+
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.30);
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.35);
+    --shadow: 0 4px 16px rgba(0, 0, 0, 0.40);
+    --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.45);
+    --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.50);
+    --shadow-xl: 0 24px 64px rgba(0, 0, 0, 0.60);
 }
 
-/* Smooth transitions for theme switching */
-* {
-    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
-}
-
-/* Reset & Base */
-*, *::before, *::after {
+/* ── Reset & Base ──────────────────────────────────────────── */
+*,
+*::before,
+*::after {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
 }
 
+html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+}
+
 body {
     font-family: var(--font-body);
-    color: var(--text-primary);
-    background: var(--bg-primary);
-    line-height: 1.6;
+    font-size: 15px;
+    line-height: 1.65;
+    color: var(--ink);
+    background: var(--bg);
+    transition: background-color var(--t), color var(--t);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    line-height: 1.15;
+    color: var(--ink);
+}
+
+a {
+    color: inherit;
+    text-decoration: none;
+}
+
+img {
+    display: block;
+    max-width: 100%;
+}
+
+button {
+    cursor: pointer;
+    font-family: inherit;
+}
+
+ul,
+ol {
+    list-style: none;
 }

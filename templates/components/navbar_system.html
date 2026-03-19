@@ -1,58 +1,38 @@
-<div class="sys-topbar">
-    <div class="sys-topbar-left">
-        <button class="sidebar-toggle" onclick="toggleSidebar()">
-            <i class="fas fa-bars"></i>
-        </button>
-        <div class="sys-brand">Admin Dashboard</div>
-    </div>
-    
-    <div class="sys-topbar-right">
-        <!-- Theme Toggle Button - Fixed: No template logic -->
-        <button class="theme-toggle" onclick="toggleTheme()">
-            <i class="fas fa-sun"></i>
-            <i class="fas fa-moon"></i>
-        </button>
-        
-        <div class="sys-user-chip" onclick="toggleUserDropdown()">
-            <div class="sys-avatar">
-                {{ user.username|first|upper }}
-            </div>
-            <div class="sys-user-info">
-                <span class="sys-user-name">{{ user.get_full_name|default:user.username }}</span>
-                <span class="sys-user-role">Administrator</span>
-            </div>
-            <i class="fas fa-chevron-down" style="font-size:12px;color:var(--sys-muted)"></i>
-        </div>
-        
-        <div class="sys-user-dropdown" id="userDropdown">
-            <div class="dropdown-header">
-                <strong>{{ user.get_full_name|default:user.username }}</strong>
-                <small>{{ user.email }}</small>
-            </div>
-            <a href="#">
-                <i class="fas fa-user"></i> My Profile
-            </a>
-            <a href="#">
-                <i class="fas fa-cog"></i> Account Settings
-            </a>
-            <hr>
-            <a href="{% url 'accounts:logout' %}" class="dropdown-danger">
-                <i class="fas fa-sign-out-alt"></i> Logout
-            </a>
-        </div>
-    </div>
-</div>
+{% load rbac_tags %}
+<div class="adm-topbar">
+  <div class="topbar-left">
+    <button class="sidebar-toggle" onclick="toggleSidebar()" aria-label="Toggle sidebar">
+      <i class="fas fa-bars"></i>
+    </button>
+    <span class="topbar-title">Admin Dashboard</span>
+  </div>
 
-<script>
-    function toggleSidebar() {
-        const sidebar = document.getElementById('sidebar');
-        const main = document.getElementById('sysMain');
-        
-        if (window.innerWidth <= 768) {
-            sidebar.classList.toggle('mobile-open');
-        } else {
-            sidebar.classList.toggle('collapsed');
-            main.classList.toggle('expanded');
-        }
-    }
-</script>
+  <div class="topbar-right">
+    <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
+      <i class="fas fa-sun"></i>
+      <i class="fas fa-moon"></i>
+    </button>
+
+    <div class="topbar-user" onclick="toggleUserDropdown()">
+      <div class="topbar-avatar">{{ user.username|first|upper }}</div>
+      <div class="topbar-user-info">
+        <span class="topbar-user-name">{{ user.get_full_name|default:user.username }}</span>
+        <span class="topbar-user-role">Administrator</span>
+      </div>
+      <i class="fas fa-chevron-down" style="font-size:11px;color:var(--adm-ink-muted);margin-left:4px"></i>
+
+      <div class="topbar-dropdown" id="userDropdown">
+        <div class="dropdown-header">
+          <strong>{{ user.get_full_name|default:user.username }}</strong>
+          <small>{{ user.email }}</small>
+        </div>
+        <a href="#"><i class="fas fa-user"></i> My Profile</a>
+        <a href="#"><i class="fas fa-key"></i> Change Password</a>
+        <hr>
+        <a href="{% url 'accounts:logout' %}" class="dd-danger">
+          <i class="fas fa-sign-out-alt"></i> Logout
+        </a>
+      </div>
+    </div>
+  </div>
+</div>

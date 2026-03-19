@@ -1,123 +1,107 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Vistalk{% endblock %}</title>
-    
-    <!-- Preconnect for fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    
-    <!-- Main Stylesheets -->
-    {% load static %}
-    <link rel="stylesheet" href="{% static 'css/variables.css' %}">
-    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
-    
-    {% block extra_css %}{% endblock %}
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Vistalk{% endblock %}</title>
+
+  {% load static %}
+  <link rel="stylesheet" href="{% static 'css/variables.css' %}">
+  {% block css %}{% endblock %}
+
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body class="{% block body_class %}{% endblock %}">
 
-<!-- Theme initialization script - runs before anything else -->
+<!-- Theme boot (runs before paint to avoid FOUC) -->
 <script>
-    (function() {
-        // Get saved theme or default to light
-        const savedTheme = localStorage.getItem('theme') || 'light';
-        
-        // Apply theme to body
-        document.body.setAttribute('data-theme', savedTheme);
-        
-        // Make theme available globally
-        window.currentTheme = savedTheme;
-    })();
+  (function(){
+    var t = localStorage.getItem('theme') || 'light';
+    document.documentElement.setAttribute('data-theme', t);
+    document.body.setAttribute('data-theme', t);
+  })();
 </script>
 
 {% if messages %}
 <div class="toast-wrap">
-    {% for message in messages %}
-    <div class="toast {{ message.tags }}">{{ message }}</div>
-    {% endfor %}
+  {% for msg in messages %}
+  <div class="toast {{ msg.tags }}">{{ msg }}</div>
+  {% endfor %}
 </div>
 {% endif %}
 
 {% block content %}{% endblock %}
 
-<!-- Consolidated JavaScript -->
 <script>
-    // Theme toggle function
-    function toggleTheme() {
-        const body = document.body;
-        const currentTheme = body.getAttribute('data-theme');
-        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
-        
-        // Update body attribute
-        body.setAttribute('data-theme', newTheme);
-        
-        // Save to localStorage
-        localStorage.setItem('theme', newTheme);
-        
-        // Update global variable
-        window.currentTheme = newTheme;
-        
-        // Update active state on toggle buttons (if you want visual feedback)
-        document.querySelectorAll('.theme-toggle i').forEach(icon => {
-            icon.classList.remove('active');
-            if ((newTheme === 'light' && icon.classList.contains('fa-sun')) ||
-                (newTheme === 'dark' && icon.classList.contains('fa-moon'))) {
-                icon.classList.add('active');
-            }
-        });
+// ── Theme toggle ──────────────────────────────────────────────
+function toggleTheme() {
+  var cur = document.body.getAttribute('data-theme');
+  var next = cur === 'light' ? 'dark' : 'light';
+  document.body.setAttribute('data-theme', next);
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('theme', next);
+  document.querySelectorAll('.theme-toggle i').forEach(function(el){
+    el.classList.remove('active');
+    if ((next==='light' && el.classList.contains('fa-sun')) ||
+        (next==='dark'  && el.classList.contains('fa-moon'))) {
+      el.classList.add('active');
     }
+  });
+}
 
-    // Initialize theme toggle buttons on page load
-    document.addEventListener('DOMContentLoaded', function() {
-        const currentTheme = document.body.getAttribute('data-theme');
-        
-        // Set active state on theme toggle icons
-        document.querySelectorAll('.theme-toggle i').forEach(icon => {
-            icon.classList.remove('active');
-            if ((currentTheme === 'light' && icon.classList.contains('fa-sun')) ||
-                (currentTheme === 'dark' && icon.classList.contains('fa-moon'))) {
-                icon.classList.add('active');
-            }
-        });
-    });
+// ── Toast auto-dismiss ────────────────────────────────────────
+setTimeout(function(){
+  document.querySelectorAll('.toast').forEach(function(t){
+    t.style.transition = 'opacity .4s';
+    t.style.opacity = '0';
+    setTimeout(function(){ t.remove(); }, 400);
+  });
+}, 4000);
 
-    // Toast auto-dismiss
-    setTimeout(() => {
-        document.querySelectorAll('.toast').forEach(toast => {
-            toast.style.transition = 'opacity .5s';
-            toast.style.opacity = '0';
-            setTimeout(() => toast.remove(), 500);
-        });
-    }, 4000);
+// ── Mobile nav ────────────────────────────────────────────────
+function toggleMobileMenu(){
+  var m = document.getElementById('mobileMenu');
+  if (m) m.classList.toggle('open');
+}
 
-    // Mobile menu toggle
-    function toggleMobileMenu() {
-        const menu = document.getElementById('mobileMenu');
-        if (menu) menu.classList.toggle('open');
+// ── User dropdown ─────────────────────────────────────────────
+function toggleUserDropdown(){
+  var d = document.getElementById('userDropdown');
+  if (d) d.classList.toggle('open');
+}
+document.addEventListener('click', function(e){
+  var chip = document.querySelector('.topbar-user');
+  var dd   = document.getElementById('userDropdown');
+  if (chip && dd && !chip.contains(e.target)) dd.classList.remove('open');
+});
+
+// ── Sidebar toggle (admin) ────────────────────────────────────
+function toggleSidebar(){
+  var sb   = document.getElementById('sidebar');
+  var main = document.getElementById('admMain');
+  if (!sb) return;
+  if (window.innerWidth <= 768) {
+    sb.classList.toggle('mobile-open');
+  } else {
+    sb.classList.toggle('collapsed');
+    if (main) main.classList.toggle('expanded');
+  }
+}
+
+// ── Sync theme icon state on load ─────────────────────────────
+document.addEventListener('DOMContentLoaded', function(){
+  var theme = document.body.getAttribute('data-theme');
+  document.querySelectorAll('.theme-toggle i').forEach(function(el){
+    el.classList.remove('active');
+    if ((theme==='light' && el.classList.contains('fa-sun')) ||
+        (theme==='dark'  && el.classList.contains('fa-moon'))) {
+      el.classList.add('active');
     }
-
-    // User dropdown toggle
-    function toggleUserDropdown() {
-        const dropdown = document.getElementById('userDropdown');
-        if (dropdown) dropdown.classList.toggle('open');
-    }
-
-    // Close dropdown when clicking outside
-    document.addEventListener('click', function(e) {
-        const chip = document.querySelector('.sys-user-chip');
-        const dropdown = document.getElementById('userDropdown');
-        
-        if (chip && dropdown && !chip.contains(e.target)) {
-            dropdown.classList.remove('open');
-        }
-    });
+  });
+});
 </script>
 
-<!-- Font Awesome for icons -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-
-{% block extra_js %}{% endblock %}
+{% block js %}{% endblock %}
 </body>
 </html>

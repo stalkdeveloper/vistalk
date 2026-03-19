@@ -1,311 +1,175 @@
 {% extends 'base.html' %}
 {% load static %}
 {% block title %}Edit User - Vistalk Admin{% endblock %}
-{% block body_class %}sys-layout{% endblock %}
-
-{% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/system.css' %}">
-<style>
-    .page-header {
-        display: flex;
-        align-items: center;
-        gap: 16px;
-        margin-bottom: 32px;
-    }
-    
-    .back-btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        color: var(--sys-muted);
-        text-decoration: none;
-        font-size: 14px;
-        padding: 8px 14px;
-        background: var(--sys-surface-2);
-        border: 1px solid var(--sys-border);
-        border-radius: 10px;
-        transition: all 0.2s;
-    }
-    
-    .back-btn:hover {
-        border-color: var(--brand-orange);
-        color: var(--brand-orange);
-    }
-    
-    .back-btn i {
-        font-size: 12px;
-    }
-    
-    .page-title {
-        font-size: 24px;
-        font-weight: 800;
-        letter-spacing: -0.5px;
-        color: var(--sys-text);
-    }
-
-    .form-card {
-        background: var(--sys-surface);
-        border: 1px solid var(--sys-border);
-        border-radius: 18px;
-        padding: 36px;
-    }
-    
-    .form-section {
-        margin-bottom: 32px;
-    }
-    
-    .form-section-title {
-        font-size: 12px;
-        font-weight: 700;
-        color: var(--sys-muted);
-        text-transform: uppercase;
-        letter-spacing: 1.5px;
-        margin-bottom: 20px;
-        padding-bottom: 12px;
-        border-bottom: 1px solid var(--sys-border);
-    }
-    
-    .form-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 20px;
-    }
-    
-    .form-group {
-        margin-bottom: 0;
-    }
-    
-    .form-label {
-        display: block;
-        font-size: 12px;
-        font-weight: 600;
-        color: var(--sys-muted);
-        margin-bottom: 8px;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    
-    .form-input, .form-select {
-        width: 100%;
-        padding: 12px 16px;
-        font-size: 14px;
-        border: 1.5px solid var(--sys-border);
-        border-radius: 10px;
-        outline: none;
-        transition: all 0.2s;
-        background: var(--sys-surface-2);
-        color: var(--sys-text);
-        font-family: inherit;
-    }
-    
-    .form-input:focus, .form-select:focus {
-        border-color: var(--brand-orange);
-        box-shadow: 0 0 0 3px rgba(255,138,92,0.1);
-    }
-    
-    .form-input::placeholder {
-        color: var(--sys-muted);
-    }
-    
-    .form-error {
-        color: #fc8181;
-        font-size: 12px;
-        margin-top: 6px;
-    }
-
-    .roles-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-        gap: 10px;
-    }
-    
-    .role-option {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 12px 14px;
-        background: var(--sys-surface-2);
-        border: 1.5px solid var(--sys-border);
-        border-radius: 10px;
-        cursor: pointer;
-        transition: all 0.2s;
-    }
-    
-    .role-option:hover {
-        border-color: var(--brand-orange);
-    }
-    
-    .role-option input[type="checkbox"] {
-        width: 16px;
-        height: 16px;
-        accent-color: var(--brand-orange);
-        cursor: pointer;
-    }
-    
-    .role-option input:checked + span {
-        color: var(--brand-orange);
-        font-weight: 600;
-    }
-    
-    .role-option span {
-        font-size: 14px;
-        color: var(--sys-text-soft);
-    }
-
-    .form-actions {
-        display: flex;
-        gap: 12px;
-        margin-top: 32px;
-        padding-top: 24px;
-        border-top: 1px solid var(--sys-border);
-    }
-    
-    .btn-save {
-        padding: 12px 28px;
-        background: var(--brand-orange);
-        color: white;
-        border: none;
-        border-radius: 40px;
-        font-size: 15px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.3s;
-        font-family: inherit;
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-    }
-    
-    .btn-save:hover {
-        background: var(--brand-dark);
-        transform: translateY(-1px);
-    }
-    
-    .btn-cancel {
-        padding: 12px 28px;
-        background: var(--sys-surface-2);
-        color: var(--sys-muted);
-        border: 1px solid var(--sys-border);
-        border-radius: 40px;
-        font-size: 15px;
-        text-decoration: none;
-        font-weight: 500;
-        transition: all 0.2s;
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-    }
-    
-    .btn-cancel:hover {
-        color: var(--sys-text);
-        border-color: var(--sys-muted);
-    }
-
-    @media (max-width: 768px) {
-        .form-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .meta-badge {
-            margin-left: 0;
-        }
-        
-        .form-actions {
-            flex-direction: column;
-        }
-        
-        .btn-save, .btn-cancel {
-            width: 100%;
-            justify-content: center;
-        }
-    }
-</style>
-{% endblock %}
+{% block css %}<link rel="stylesheet" href="{% static 'css/admin.css' %}">{% endblock %}
+{% block body_class %}adm-body{% endblock %}
 
 {% block content %}
-<div class="sys-wrapper">
-    {% include 'components/sidebar_system.html' %}
-    <div class="sys-main" id="sysMain">
-        {% include 'components/navbar_system.html' %}
-        <div class="sys-content">
+<div class="adm-wrapper">
+  {% include 'components/sidebar_system.html' %}
 
-            <div class="page-header">
-                <a href="{% url 'users:index' %}" class="back-btn">
-                    <i class="fas fa-arrow-left"></i> Back
-                </a>
-                <h1 class="page-title">Edit User</h1>
-            </div>
+  <div class="adm-main" id="admMain">
+    {% include 'components/navbar_system.html' %}
 
-            <div class="form-card">
-                <form method="POST">
-                    {% csrf_token %}
-
-                    <!-- Basic Info -->
-                    <div class="form-section">
-                        <div class="form-section-title">Basic Information</div>
-                        <div class="form-grid">
-                            <div class="form-group">
-                                <label class="form-label">Username</label>
-                                <input class="form-input" type="text" name="username"
-                                       value="{{ form.username.value|default:'' }}">
-                                {% for e in form.username.errors %}<p class="form-error">{{ e }}</p>{% endfor %}
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">Email</label>
-                                <input class="form-input" type="email" name="email"
-                                       value="{{ form.email.value|default:'' }}">
-                                {% for e in form.email.errors %}<p class="form-error">{{ e }}</p>{% endfor %}
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">User Type</label>
-                                <select class="form-select" name="user_type">
-                                    <option value="platform" {% if form.user_type.value == 'platform' %}selected{% endif %}>Platform</option>
-                                    <option value="system"   {% if form.user_type.value == 'system' %}selected{% endif %}>System / Staff</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">Status</label>
-                                <select class="form-select" name="is_active">
-                                    <option value="True"  {% if form.is_active.value %}selected{% endif %}>Active</option>
-                                    <option value="False" {% if not form.is_active.value %}selected{% endif %}>Inactive</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">Staff Access</label>
-                                <select class="form-select" name="is_staff">
-                                    <option value="True"  {% if form.is_staff.value %}selected{% endif %}>Yes (Django Admin)</option>
-                                    <option value="False" {% if not form.is_staff.value %}selected{% endif %}>No</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Roles -->
-                    <div class="form-section">
-                        <div class="form-section-title">Assign Roles</div>
-                        <div class="roles-grid">
-                            {% for role in form.roles.field.queryset %}
-                            <label class="role-option">
-                                <input type="checkbox" name="roles" value="{{ role.pk }}"
-                                    {% if role in form.initial.roles %}checked{% endif %}>
-                                <span>{{ role.display_name }}</span>
-                            </label>
-                            {% endfor %}
-                        </div>
-                    </div>
-
-                    <div class="form-actions">
-                        <button type="submit" class="btn-save">
-                            <i class="fas fa-save"></i> Save Changes
-                        </button>
-                        <a href="{% url 'users:index' %}" class="btn-cancel">
-                            <i class="fas fa-times"></i> Cancel
-                        </a>
-                    </div>
-                </form>
-            </div>
-
+    <div class="adm-content">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Edit User</h1>
+          <p class="page-subtitle">{{ target_user.get_full_name|default:target_user.username }}</p>
         </div>
+        <div class="page-actions">
+          <a href="{% url 'users:index' %}" class="adm-btn adm-btn-outline">
+            <i class="fas fa-arrow-left"></i> Back to Users
+          </a>
+        </div>
+      </div>
+
+      {% if form.non_field_errors %}
+      <div class="adm-alert adm-alert-err">
+        <i class="fas fa-exclamation-circle"></i>
+        <div>{{ form.non_field_errors.0 }}</div>
+      </div>
+      {% endif %}
+
+      <form method="POST" novalidate>
+        {% csrf_token %}
+
+        <div class="adm-card">
+          <div class="adm-card-head">
+            <div class="adm-card-title"><i class="fas fa-user"></i> Personal Information</div>
+          </div>
+
+          <!-- Name: 3 columns -->
+          <div class="adm-form-row adm-form-row-3">
+            <div class="adm-form-group">
+              <label class="adm-label">First Name <span class="req">*</span></label>
+              <input type="text" name="first_name" class="adm-input"
+                placeholder="First Name"
+                value="{{ form.first_name.value|default:target_user.first_name }}">
+              {% for err in form.first_name.errors %}
+              <p class="adm-form-error"><i class="fas fa-exclamation-circle"></i> {{ err }}</p>
+              {% endfor %}
+            </div>
+            <div class="adm-form-group">
+              <label class="adm-label">Middle Name</label>
+              <input type="text" name="middle_name" class="adm-input"
+                placeholder="Middle Name (optional)"
+                value="{{ form.middle_name.value|default:target_user.middle_name }}">
+            </div>
+            <div class="adm-form-group">
+              <label class="adm-label">Last Name <span class="req">*</span></label>
+              <input type="text" name="last_name" class="adm-input"
+                placeholder="Last Name"
+                value="{{ form.last_name.value|default:target_user.last_name }}">
+              {% for err in form.last_name.errors %}
+              <p class="adm-form-error"><i class="fas fa-exclamation-circle"></i> {{ err }}</p>
+              {% endfor %}
+            </div>
+          </div>
+
+          <!-- Account info: 2 columns -->
+          <div class="adm-form-row adm-form-row-2">
+            <div class="adm-form-group">
+              <label class="adm-label">Username <span class="req">*</span></label>
+              <input type="text" name="username" class="adm-input"
+                value="{{ form.username.value|default:target_user.username }}">
+              {% for err in form.username.errors %}
+              <p class="adm-form-error"><i class="fas fa-exclamation-circle"></i> {{ err }}</p>
+              {% endfor %}
+            </div>
+            <div class="adm-form-group">
+              <label class="adm-label">Email <span class="req">*</span></label>
+              <input type="email" name="email" class="adm-input"
+                value="{{ form.email.value|default:target_user.email }}">
+              {% for err in form.email.errors %}
+              <p class="adm-form-error"><i class="fas fa-exclamation-circle"></i> {{ err }}</p>
+              {% endfor %}
+            </div>
+          </div>
+
+          <!-- Type & status: 2 columns -->
+          <div class="adm-form-row adm-form-row-2">
+            <div class="adm-form-group">
+              <label class="adm-label">User Type</label>
+              <select name="user_type" class="adm-select">
+                <option value="platform" {% if target_user.user_type == 'platform' %}selected{% endif %}>Platform (Web User)</option>
+                <option value="system"   {% if target_user.user_type == 'system' %}selected{% endif %}>System (Staff)</option>
+              </select>
+            </div>
+            <div class="adm-form-group">
+              <label class="adm-label">Status</label>
+              <div style="display:flex;align-items:center;gap:10px;margin-top:10px">
+                <input type="checkbox" name="is_active" id="id_is_active"
+                  {% if target_user.is_active %}checked{% endif %}
+                  style="width:16px;height:16px;accent-color:var(--brand)">
+                <label for="id_is_active" style="font-size:14px;color:var(--adm-ink-soft);cursor:pointer">
+                  Active account
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Role Assignment -->
+        <div class="adm-card" style="margin-top:var(--sp-5)">
+          <div class="adm-card-head">
+            <div class="adm-card-title"><i class="fas fa-shield-alt"></i> Assign Role</div>
+          </div>
+          <p class="adm-form-hint" style="margin-bottom:var(--sp-4)">
+            Select one role. The current role will be replaced.
+          </p>
+
+          {% with current_role=form.role.field.initial %}
+          <div class="role-radio-group">
+            <label class="role-radio-item">
+              <input type="radio" name="role" value=""
+                {% if not form.role.initial %}checked{% endif %}>
+              <div>
+                <div class="role-radio-label">- No role -</div>
+                <div class="role-radio-desc">Remove all role assignments</div>
+              </div>
+            </label>
+            {% for role in form.role.field.queryset %}
+            <label class="role-radio-item {% if form.role.initial.pk == role.pk %}selected{% endif %}">
+              <input type="radio" name="role" value="{{ role.pk }}"
+                {% if form.role.initial.pk == role.pk %}checked{% endif %}>
+              <div>
+                <div class="role-radio-label">{{ role.display_name }}</div>
+                <div class="role-radio-desc">
+                  {{ role.description|default:"No description" }} ·
+                  {{ role.permissions.count }} permission{{ role.permissions.count|pluralize }}
+                  {% if role.is_default %}<span class="tag tag-green" style="margin-left:6px">Default</span>{% endif %}
+                </div>
+              </div>
+            </label>
+            {% endfor %}
+          </div>
+          {% endwith %}
+        </div>
+
+        <!-- Actions -->
+        <div class="adm-form-actions">
+          <button type="submit" class="adm-btn adm-btn-primary">
+            <i class="fas fa-save"></i> Save Changes
+          </button>
+          <a href="{% url 'users:index' %}" class="adm-btn adm-btn-outline">Cancel</a>
+        </div>
+
+      </form>
     </div>
+  </div>
 </div>
+{% endblock %}
+
+{% block js %}
+<script>
+document.querySelectorAll('.role-radio-item input[type="radio"]').forEach(function(radio){
+  radio.addEventListener('change', function(){
+    document.querySelectorAll('.role-radio-item').forEach(function(item){
+      item.classList.remove('selected');
+    });
+    if (this.checked) this.closest('.role-radio-item').classList.add('selected');
+  });
+});
+</script>
 {% endblock %}

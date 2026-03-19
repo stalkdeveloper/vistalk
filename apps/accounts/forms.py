@@ -4,22 +4,32 @@ from django.contrib.auth.forms import AuthenticationForm
 from apps.users.models import User
 
 
+# ─── Platform Registration ────────────────────────────────────────────────────
+
 class PlatformRegisterForm(forms.ModelForm):
+    first_name = forms.CharField(
+        max_length=150,
+        widget=forms.TextInput(attrs={'placeholder': 'First Name'}),
+    )
+    last_name = forms.CharField(
+        max_length=150,
+        widget=forms.TextInput(attrs={'placeholder': 'Last Name'}),
+    )
     password = forms.CharField(
         widget=forms.PasswordInput(attrs={'placeholder': 'Password'}),
-        min_length=8
+        min_length=8,
     )
     password_confirm = forms.CharField(
         label='Confirm Password',
-        widget=forms.PasswordInput(attrs={'placeholder': 'Confirm Password'})
+        widget=forms.PasswordInput(attrs={'placeholder': 'Confirm Password'}),
     )
 
     class Meta:
-        model = User
-        fields = ['username', 'email', 'password']
+        model  = User
+        fields = ['first_name', 'last_name', 'username', 'email', 'password']
         widgets = {
             'username': forms.TextInput(attrs={'placeholder': 'Username'}),
-            'email': forms.EmailInput(attrs={'placeholder': 'Email'}),
+            'email':    forms.EmailInput(attrs={'placeholder': 'Email'}),
         }
 
     def clean(self):
@@ -35,23 +45,27 @@ class PlatformRegisterForm(forms.ModelForm):
         return email
 
 
+# ─── Platform Login ───────────────────────────────────────────────────────────
+
 class PlatformLoginForm(AuthenticationForm):
     username = forms.EmailField(
         label='Email',
-        widget=forms.EmailInput(attrs={'placeholder': 'Email Address', 'autofocus': True})
+        widget=forms.EmailInput(attrs={'placeholder': 'Email Address', 'autofocus': True}),
     )
     password = forms.CharField(
-        widget=forms.PasswordInput(attrs={'placeholder': 'Password'})
+        widget=forms.PasswordInput(attrs={'placeholder': 'Password'}),
     )
 
+
+# ─── System (Staff) Login ─────────────────────────────────────────────────────
 
 class SystemLoginForm(AuthenticationForm):
     username = forms.EmailField(
         label='Staff Email',
-        widget=forms.EmailInput(attrs={'placeholder': 'Staff Email', 'autofocus': True})
+        widget=forms.EmailInput(attrs={'placeholder': 'Staff Email', 'autofocus': True}),
     )
     password = forms.CharField(
-        widget=forms.PasswordInput(attrs={'placeholder': 'Password'})
+        widget=forms.PasswordInput(attrs={'placeholder': 'Password'}),
     )
 
     def confirm_login_allowed(self, user):
@@ -60,28 +74,47 @@ class SystemLoginForm(AuthenticationForm):
             raise forms.ValidationError("This portal is for staff only.")
 
 
+# ─── Platform Forgot Password ─────────────────────────────────────────────────
+
 class ForgotPasswordForm(forms.Form):
     email = forms.EmailField(
         label='Email Address',
-        widget=forms.EmailInput(attrs={'placeholder': 'Enter your registered email'})
+        widget=forms.EmailInput(attrs={'placeholder': 'Enter your registered email'}),
     )
 
     def clean_email(self):
         email = self.cleaned_data.get('email')
         if not User.objects.filter(email=email, user_type='platform').exists():
-            raise forms.ValidationError("No account found with this email.")
+            raise forms.ValidationError("No platform account found with this email.")
         return email
 
+
+# ─── System (Staff) Forgot Password ──────────────────────────────────────────
+
+class SystemForgotPasswordForm(forms.Form):
+    email = forms.EmailField(
+        label='Staff Email',
+        widget=forms.EmailInput(attrs={'placeholder': 'Enter your staff email'}),
+    )
+
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        if not User.objects.filter(email=email, user_type='system').exists():
+            raise forms.ValidationError("No staff account found with this email.")
+        return email
+
+
+# ─── Reset Password (shared) ──────────────────────────────────────────────────
 
 class ResetPasswordForm(forms.Form):
     password = forms.CharField(
         label='New Password',
         widget=forms.PasswordInput(attrs={'placeholder': 'New Password'}),
-        min_length=8
+        min_length=8,
     )
     password_confirm = forms.CharField(
         label='Confirm Password',
-        widget=forms.PasswordInput(attrs={'placeholder': 'Confirm New Password'})
+        widget=forms.PasswordInput(attrs={'placeholder': 'Confirm New Password'}),
     )
 
     def clean(self):

@@ -1,0 +1,2790 @@
+apps/accounts/apps.py
+
+from django.apps import AppConfig
+class AccountsConfig(AppConfig):
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'apps.accounts'
+
+D:\python\django\vistalk\apps\accounts\forms.py
+# apps/accounts/forms.py
+from django import forms
+from django.contrib.auth.forms import AuthenticationForm
+from apps.users.models import User
+
+
+class PlatformRegisterForm(forms.ModelForm):
+    password = forms.CharField(
+        widget=forms.PasswordInput(attrs={'placeholder': 'Password'}),
+        min_length=8
+    )
+    password_confirm = forms.CharField(
+        label='Confirm Password',
+        widget=forms.PasswordInput(attrs={'placeholder': 'Confirm Password'})
+    )
+
+    class Meta:
+        model = User
+        fields = ['username', 'email', 'password']
+        widgets = {
+            'username': forms.TextInput(attrs={'placeholder': 'Username'}),
+            'email': forms.EmailInput(attrs={'placeholder': 'Email'}),
+        }
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get('password') != cleaned.get('password_confirm'):
+            raise forms.ValidationError("Passwords do not match.")
+        return cleaned
+
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        if User.objects.filter(email=email).exists():
+            raise forms.ValidationError("This email is already registered.")
+        return email
+
+
+class PlatformLoginForm(AuthenticationForm):
+    username = forms.EmailField(
+        label='Email',
+        widget=forms.EmailInput(attrs={'placeholder': 'Email Address', 'autofocus': True})
+    )
+    password = forms.CharField(
+        widget=forms.PasswordInput(attrs={'placeholder': 'Password'})
+    )
+
+
+class SystemLoginForm(AuthenticationForm):
+    username = forms.EmailField(
+        label='Staff Email',
+        widget=forms.EmailInput(attrs={'placeholder': 'Staff Email', 'autofocus': True})
+    )
+    password = forms.CharField(
+        widget=forms.PasswordInput(attrs={'placeholder': 'Password'})
+    )
+
+    def confirm_login_allowed(self, user):
+        super().confirm_login_allowed(user)
+        if user.user_type != 'system':
+            raise forms.ValidationError("This portal is for staff only.")
+
+
+class ForgotPasswordForm(forms.Form):
+    email = forms.EmailField(
+        label='Email Address',
+        widget=forms.EmailInput(attrs={'placeholder': 'Enter your registered email'})
+    )
+
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        if not User.objects.filter(email=email, user_type='platform').exists():
+            raise forms.ValidationError("No account found with this email.")
+        return email
+
+
+class ResetPasswordForm(forms.Form):
+    password = forms.CharField(
+        label='New Password',
+        widget=forms.PasswordInput(attrs={'placeholder': 'New Password'}),
+        min_length=8
+    )
+    password_confirm = forms.CharField(
+        label='Confirm Password',
+        widget=forms.PasswordInput(attrs={'placeholder': 'Confirm New Password'})
+    )
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get('password') != cleaned.get('password_confirm'):
+            raise forms.ValidationError("Passwords do not match.")
+        return cleaned
+
+
+D:\python\django\vistalk\apps\accounts\urls.py
+from django.urls import path
+from . import views
+
+app_name = 'accounts'
+
+urlpatterns = [
+    path('',                            views.HomeView.as_view(),           name='home'),
+    path('register/',                   views.PlatformRegisterView.as_view(), name='register'),
+    path('login/',                      views.PlatformLoginView.as_view(),  name='login'),
+    path('logout/',                     views.LogoutView.as_view(),         name='logout'),
+    path('forgot-password/',            views.ForgotPasswordView.as_view(), name='forgot_password'),
+    path('reset-password/<str:token>/', views.ResetPasswordView.as_view(),  name='reset_password'),
+    path('admin/login/',                views.SystemLoginView.as_view(),    name='system_login'),
+]
+
+D:\python\django\vistalk\apps\accounts\views.py
+# apps/accounts/views.py
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth import login, logout
+from django.contrib import messages
+from django.views.generic import View
+from django.utils.crypto import get_random_string
+from django.core.cache import cache
+
+from .forms import (
+    PlatformRegisterForm, PlatformLoginForm, SystemLoginForm,
+    ForgotPasswordForm, ResetPasswordForm
+)
+from apps.roles.models import Role, UserRole
+from apps.users.models import User
+
+
+class HomeView(View):
+    """Public landing page"""
+    def get(self, request):
+        return render(request, 'home.html')
+
+
+class PlatformRegisterView(View):
+    template_name = 'accounts/register.html'
+
+    def get(self, request):
+        if request.user.is_authenticated:
+            return redirect('core:dashboard')
+        return render(request, self.template_name, {'form': PlatformRegisterForm()})
+
+    def post(self, request):
+        form = PlatformRegisterForm(request.POST)
+        if form.is_valid():
+            user = form.save(commit=False)
+            user.set_password(form.cleaned_data['password'])
+            user.user_type = 'platform'
+            user.save()
+            try:
+                default_role = Role.objects.get(is_default=True)
+                UserRole.objects.create(user=user, role=default_role)
+            except Role.DoesNotExist:
+                pass
+            login(request, user)
+            messages.success(request, f"Welcome, {user.username}!")
+            return redirect('core:dashboard')
+        return render(request, self.template_name, {'form': form})
+
+
+class PlatformLoginView(View):
+    template_name = 'accounts/login.html'
+
+    def get(self, request):
+        if request.user.is_authenticated:
+            return redirect('core:dashboard')
+        return render(request, self.template_name, {'form': PlatformLoginForm(request)})
+
+    def post(self, request):
+        form = PlatformLoginForm(request, data=request.POST)
+        if form.is_valid():
+            user = form.get_user()
+            if user.user_type == 'system':
+                messages.error(request, "Staff must use the admin portal.")
+                return redirect('accounts:system_login')
+            login(request, user)
+            messages.success(request, f"Welcome back, {user.username}!")
+            return redirect('core:dashboard')
+        return render(request, self.template_name, {'form': form})
+
+
+class SystemLoginView(View):
+    template_name = 'accounts/system_login.html'
+
+    def get(self, request):
+        if request.user.is_authenticated and request.user.user_type == 'system':
+            return redirect('core:admin_dashboard')
+        return render(request, self.template_name, {'form': SystemLoginForm(request)})
+
+    def post(self, request):
+        form = SystemLoginForm(request, data=request.POST)
+        if form.is_valid():
+            login(request, form.get_user())
+            messages.success(request, "Welcome to staff portal.")
+            return redirect('core:admin_dashboard')
+        return render(request, self.template_name, {'form': form})
+
+
+class LogoutView(View):
+    def get(self, request):
+        user_type = request.user.user_type if request.user.is_authenticated else 'platform'
+        logout(request)
+        messages.info(request, "Logged out successfully.")
+        return redirect('accounts:system_login' if user_type == 'system' else 'accounts:login')
+
+
+class ForgotPasswordView(View):
+    template_name = 'accounts/forgot_password.html'
+
+    def get(self, request):
+        return render(request, self.template_name, {'form': ForgotPasswordForm()})
+
+    def post(self, request):
+        form = ForgotPasswordForm(request.POST)
+        if form.is_valid():
+            email = form.cleaned_data['email']
+            token = get_random_string(64)
+            # Store token in cache for 1 hour (in production use email)
+            cache.set(f'pwd_reset_{token}', email, timeout=3600)
+            # In production: send email with reset link
+            # For dev: show token directly in message
+            reset_url = request.build_absolute_uri(f'/reset-password/{token}/')
+            messages.success(
+                request,
+                f"Reset link (dev only): {reset_url}"
+            )
+            return redirect('accounts:forgot_password')
+        return render(request, self.template_name, {'form': form})
+
+
+class ResetPasswordView(View):
+    template_name = 'accounts/reset_password.html'
+
+    def get(self, request, token):
+        email = cache.get(f'pwd_reset_{token}')
+        if not email:
+            messages.error(request, "Reset link is invalid or has expired.")
+            return redirect('accounts:forgot_password')
+        return render(request, self.template_name, {'form': ResetPasswordForm(), 'token': token})
+
+    def post(self, request, token):
+        email = cache.get(f'pwd_reset_{token}')
+        if not email:
+            messages.error(request, "Reset link is invalid or has expired.")
+            return redirect('accounts:forgot_password')
+
+        form = ResetPasswordForm(request.POST)
+        if form.is_valid():
+            user = User.objects.get(email=email)
+            user.set_password(form.cleaned_data['password'])
+            user.save()
+            cache.delete(f'pwd_reset_{token}')
+            messages.success(request, "Password reset successfully! Please login.")
+            return redirect('accounts:login')
+        return render(request, self.template_name, {'form': form, 'token': token})
+
+apps/core/apps.py
+
+from django.apps import AppConfig
+class CoreConfig(AppConfig):
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'apps.core'
+
+``
+D:\python\django\vistalk\apps\core\middleware.py
+import logging
+import time
+from django.utils.timezone import now
+
+request_logger = logging.getLogger('requests')
+
+
+class RequestLogMiddleware:
+    """
+    - URL
+    - Method (GET/POST)
+    - User (logged in ya anonymous)
+    - Status code
+    - Response time
+    - IP address
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        start_time = time.time()
+
+        response = self.get_response(request)
+
+        duration     = round((time.time() - start_time) * 1000, 2)
+        user         = request.user.email if request.user.is_authenticated else 'anonymous'
+        ip           = self.get_client_ip(request)
+        status_code  = response.status_code
+        method       = request.method
+        path         = request.get_full_path()
+        timestamp    = now().strftime('%Y-%m-%d %H:%M:%S')
+
+        log_message = (
+            f"[{timestamp}] {method} {path} | "
+            f"status={status_code} | "
+            f"user={user} | "
+            f"ip={ip} | "
+            f"duration={duration}ms"
+        )
+
+        if status_code >= 500:
+            request_logger.error(log_message)
+        elif status_code >= 400:
+            request_logger.warning(log_message)
+        else:
+            request_logger.info(log_message)
+
+        return response
+
+    def get_client_ip(self, request):
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            return x_forwarded_for.split(',')[0].strip()
+        return request.META.get('REMOTE_ADDR', 'unknown')
+
+
+D:\python\django\vistalk\apps\core\urls.py
+from django.urls import path
+from . import views
+
+app_name = 'core'
+
+urlpatterns = [
+    path('dashboard/',       views.DashboardView.as_view(),      name='dashboard'),
+    path('admin/dashboard/', views.AdminDashboardView.as_view(), name='admin_dashboard'),
+]
+
+``
+# apps/core/views.py
+from django.shortcuts import render, redirect
+from django.contrib.auth.decorators import login_required
+from django.utils.decorators import method_decorator
+from django.views.generic import View
+from apps.users.models import User
+from apps.roles.models import Role, Permission
+
+
+@method_decorator(login_required(login_url='/login/'), name='dispatch')
+class DashboardView(View):
+    def get(self, request):
+        if request.user.user_type == 'system':
+            return redirect('core:admin_dashboard')
+        return render(request, 'core/dashboard.html')
+
+
+@method_decorator(login_required(login_url='/admin/login/'), name='dispatch')
+class AdminDashboardView(View):
+    def get(self, request):
+        if request.user.user_type != 'system':
+            return redirect('core:dashboard')
+
+        stats = [
+            {'label': 'Total Users',    'value': User.objects.count()},
+            {'label': 'Platform Users', 'value': User.objects.filter(user_type='platform').count()},
+            {'label': 'System Users',   'value': User.objects.filter(user_type='system').count()},
+            {'label': 'Total Roles',    'value': Role.objects.count()},
+            {'label': 'Permissions',    'value': Permission.objects.count()},
+        ]
+        return render(request, 'core/admin_dashboard.html', {'stats': stats})
+
+apps/database/management/commands/seeders
+    
+D:\python\django\vistalk\apps\database\management\commands\seeders\permissions_seeder.py
+from apps.roles.models import Permission
+
+
+# PERMISSIONS = [
+#     {'name': 'can_manage_users',   'display_name': 'Can Manage Users',   'group': 'users'},
+#     {'name': 'can_view_users',     'display_name': 'Can View Users',     'group': 'users'},
+#     {'name': 'can_manage_roles',   'display_name': 'Can Manage Roles',   'group': 'roles'},
+#     {'name': 'can_create_post',    'display_name': 'Can Create Post',    'group': 'posts'},
+#     {'name': 'can_edit_post',      'display_name': 'Can Edit Post',      'group': 'posts'},
+#     {'name': 'can_delete_post',    'display_name': 'Can Delete Post',    'group': 'posts'},
+#     {'name': 'can_view_dashboard', 'display_name': 'Can View Dashboard', 'group': 'core'},
+# ]
+
+PERMISSIONS = [
+    # User Management
+    {'name': 'can_access_users',   'display_name': 'Can Access Users',   'group': 'users'},
+    {'name': 'can_view_users',     'display_name': 'Can View Users',     'group': 'users'},
+    {'name': 'can_create_users',   'display_name': 'Can Create Users',   'group': 'users'},
+    {'name': 'can_edit_users',     'display_name': 'Can Edit Users',     'group': 'users'},
+    {'name': 'can_delete_users',   'display_name': 'Can Delete Users',   'group': 'users'},
+
+
+    # Role Management
+    {'name': 'can_access_roles',    'display_name': 'Can Access Roles',    'group': 'roles'},
+    {'name': 'can_view_roles',     'display_name': 'Can View Roles',     'group': 'roles'},
+    {'name': 'can_create_roles',   'display_name': 'Can Create Roles',   'group': 'roles'},
+    {'name': 'can_edit_roles',     'display_name': 'Can Edit Roles',     'group': 'roles'},
+    {'name': 'can_delete_roles',   'display_name': 'Can Delete Roles',   'group': 'roles'},
+
+    # Tasks Management
+    {'name': 'can_access_tasks',   'display_name': 'Can Access Tasks',   'group': 'tasks'},
+    {'name': 'can_view_tasks',     'display_name': 'Can View Tasks',     'group': 'tasks'},
+    {'name': 'can_create_tasks',   'display_name': 'Can Create Tasks',   'group': 'tasks'},
+    {'name': 'can_edit_tasks',     'display_name': 'Can Edit Tasks',     'group': 'tasks'},
+    {'name': 'can_delete_tasks',   'display_name': 'Can Delete Tasks',   'group': 'tasks'},
+
+    # Organization Management
+    
+    # Core / Dashboard
+    {'name': 'can_view_dashboard', 'display_name': 'Can View Dashboard', 'group': 'core'},
+]
+
+
+def run(stdout):
+    stdout.write('\n📋 Seeding Permissions...')
+    permissions = {}
+    for p in PERMISSIONS:
+        perm, created = Permission.objects.get_or_create(name=p['name'], defaults=p)
+        permissions[p['name']] = perm
+        status = '  ✅ Created' if created else '  ⏭  Exists'
+        stdout.write(f"{status}: {p['name']}")
+    return permissions
+
+D:\python\django\vistalk\apps\database\management\commands\seeders\roles_seeder.py
+from apps.roles.models import Role
+
+def run(stdout, permissions):
+    stdout.write('\n🎭 Seeding Roles...')
+
+    admin_role, created = Role.objects.get_or_create(
+        name='admin',
+        defaults={
+            'display_name': 'Administrator',
+            'description': 'Full access to everything',
+            'is_default': False,
+        }
+    )
+    admin_role.permissions.set(list(permissions.values()))
+    stdout.write(f"  {'✅ Created' if created else '⏭  Exists'}: Role 'admin'")
+
+    user_role, created = Role.objects.get_or_create(
+        name='user',
+        defaults={
+            'display_name': 'User',
+            'description': 'Standard platform user',
+            'is_default': True,
+        }
+    )
+    
+    user_role.permissions.set([
+        permissions['can_view_dashboard'],
+    ])
+    
+    stdout.write(f"  {'✅ Created' if created else '⏭  Exists'}: Role 'user' (default)")
+
+    return {'admin': admin_role, 'user': user_role}
+
+D:\python\django\vistalk\apps\database\management\commands\seeders\users_seeder.py
+from apps.users.models import User
+from apps.roles.models import UserRole
+
+
+def run(stdout, roles):
+    stdout.write('\n👤 Seeding Users...')
+
+    # System user
+    system_user, created = User.objects.get_or_create(
+        email='admin@vistalk.com',
+        defaults={
+            'username': 'system_admin',
+            'user_type': 'system',
+            'is_staff': True,
+            'is_superuser': True,
+        }
+    )
+    if created:
+        system_user.set_password('Admin@123')
+        system_user.save()
+        UserRole.objects.get_or_create(user=system_user, role=roles['admin'])
+        stdout.write('  ✅ Created: admin@vistalk.com / Admin@123')
+    else:
+        stdout.write('  ⏭  Exists: admin@vistalk.com')
+
+    # Platform user
+    platform_user, created = User.objects.get_or_create(
+        email='user@vistalk.com',
+        defaults={
+            'username': 'test_user',
+            'user_type': 'platform',
+            'is_staff': False,
+            'is_superuser': False,
+        }
+    )
+    if created:
+        platform_user.set_password('User@123')
+        platform_user.save()
+        UserRole.objects.get_or_create(user=platform_user, role=roles['user'])
+        stdout.write('  ✅ Created: user@vistalk.com / User@123')
+    else:
+        stdout.write('  ⏭  Exists: user@vistalk.com')
+
+D:\python\django\vistalk\apps\database\management\commands\seed.py
+
+from django.core.management.base import BaseCommand
+from django.db import transaction
+
+from .seeders import permissions_seeder, roles_seeder, users_seeder
+
+
+class Command(BaseCommand):
+    help = 'Seed database with default data'
+
+    @transaction.atomic
+    def handle(self, *args, **kwargs):
+        self.stdout.write('🌱 Starting seed...')
+
+        permissions = permissions_seeder.run(self.stdout)
+        roles = roles_seeder.run(self.stdout, permissions)
+        users_seeder.run(self.stdout, roles)
+
+        self.stdout.write('\n' + '─' * 50)
+        self.stdout.write(self.style.SUCCESS('✅ All seeders complete!\n'))
+        self.stdout.write('🔐 System:   http://localhost:8000/admin/login/')
+        self.stdout.write('   admin@vistalk.com  /  Admin@123\n')
+        self.stdout.write('🌐 Platform: http://localhost:8000/login/')
+        self.stdout.write('   user@vistalk.com  /  User@123')
+        self.stdout.write('─' * 50)
+
+D:\python\django\vistalk\apps\database\apps.py
+
+from django.apps import AppConfig
+
+class DatabaseConfig(AppConfig):
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'apps.database'
+    label = 'database'
+
+
+D:\python\django\vistalk\apps\roles\templatetags\rbac_tags.py
+# apps/roles/templatetags/rbac_tags.py
+from django import template
+from apps.roles.mixins import has_permission, has_role
+
+register = template.Library()
+
+
+@register.filter(name='has_perm')
+def user_has_perm(user, permission_name):
+    """
+    Template usage:
+        {% load rbac_tags %}
+        {% if request.user|has_perm:"can_create_roles" %}
+    """
+    return has_permission(user, permission_name)
+
+
+@register.filter(name='has_role')
+def user_has_role(user, role_name):
+    """
+    Template usage:
+        {% if request.user|has_role:"admin" %}
+    """
+    return has_role(user, role_name)
+
+D:\python\django\vistalk\apps\roles\admin.py
+
+# apps/roles/admin.py
+from django.contrib import admin
+from .models import Role, Permission, UserRole
+
+
+@admin.register(Permission)
+class PermissionAdmin(admin.ModelAdmin):
+    list_display = ['name', 'display_name', 'group']
+    list_filter = ['group']
+    search_fields = ['name', 'display_name']
+
+
+@admin.register(Role)
+class RoleAdmin(admin.ModelAdmin):
+    list_display = ['name', 'display_name', 'is_default']
+    filter_horizontal = ['permissions']
+    list_filter = ['is_default']
+
+
+@admin.register(UserRole)
+class UserRoleAdmin(admin.ModelAdmin):
+    list_display = ['user', 'role', 'assigned_at']
+    list_filter = ['role']
+    search_fields = ['user__email', 'role__name']
+
+``roles/app.py
+from django.apps import AppConfig
+class RolesConfig(AppConfig):
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'apps.roles'
+
+``
+D:\python\django\vistalk\apps\roles\forms.py
+# apps/roles/forms.py
+from django import forms
+from apps.roles.models import Role
+
+
+class RoleForm(forms.ModelForm):
+    class Meta:
+        model = Role
+        fields = ['name', 'display_name', 'description', 'is_default']
+        widgets = {
+            'name': forms.TextInput(attrs={
+                'placeholder': 'e.g. moderator',
+                'class': 'form-control',
+            }),
+            'display_name': forms.TextInput(attrs={
+                'placeholder': 'e.g. Moderator',
+                'class': 'form-control',
+            }),
+            'description': forms.Textarea(attrs={
+                'placeholder': 'Short description of this role...',
+                'class': 'form-control',
+                'rows': 3,
+            }),
+            'is_default': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+
+    def clean_name(self):
+        name = self.cleaned_data.get('name', '').strip().lower().replace(' ', '_')
+        qs = Role.objects.filter(name=name)
+        if self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise forms.ValidationError("A role with this name already exists.")
+        return name
+
+    def clean(self):
+        cleaned = super().clean()
+        # If marking as default, warn that other default will be unset
+        # (handle this in view or signal if needed)
+        return cleaned
+
+D:\python\django\vistalk\apps\roles\mixins.py
+from functools import wraps
+from django.http import HttpResponseForbidden
+from django.shortcuts import redirect
+
+
+class RBACMixin:
+    """
+    Mixin for class-based views.
+    Usage:
+        class MyView(RBACMixin, View):
+            required_permission = 'can_create_post'
+    """
+    required_permission = None
+    required_role = None
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect('accounts:login')
+
+        if self.required_permission:
+            if not has_permission(request.user, self.required_permission):
+                return HttpResponseForbidden("You don't have permission.")
+
+        if self.required_role:
+            if not has_role(request.user, self.required_role):
+                return HttpResponseForbidden("You don't have the required role.")
+
+        return super().dispatch(request, *args, **kwargs)
+
+
+def has_permission(user, permission_name):
+    """Check if user has a specific permission through any of their roles"""
+    return user.user_roles.filter(
+        role__permissions__name=permission_name
+    ).exists()
+
+
+def has_role(user, role_name):
+    """Check if user has a specific role"""
+    return user.user_roles.filter(role__name=role_name).exists()
+
+
+def get_user_permissions(user):
+    """Get all permissions for a user"""
+    from apps.roles.models import Permission
+    return Permission.objects.filter(
+        roles__user_roles__user=user
+    ).distinct()
+
+
+def get_user_roles(user):
+    """Get all roles for a user"""
+    from apps.roles.models import Role
+    return Role.objects.filter(user_roles__user=user)
+
+
+# ─── Decorators for function-based views ────────────────────────────────────
+
+def permission_required(permission_name):
+    """
+    Usage:
+        @permission_required('can_delete_post')
+        def my_view(request):
+            ...
+    """
+    def decorator(view_func):
+        @wraps(view_func)
+        def wrapper(request, *args, **kwargs):
+            if not request.user.is_authenticated:
+                return redirect('accounts:login')
+            if not has_permission(request.user, permission_name):
+                return HttpResponseForbidden("Permission denied.")
+            return view_func(request, *args, **kwargs)
+        return wrapper
+    return decorator
+
+
+def role_required(role_name):
+    """
+    Usage:
+        @role_required('admin')
+        def my_view(request):
+            ...
+    """
+    def decorator(view_func):
+        @wraps(view_func)
+        def wrapper(request, *args, **kwargs):
+            if not request.user.is_authenticated:
+                return redirect('accounts:login')
+            if not has_role(request.user, role_name):
+                return HttpResponseForbidden("Role required.")
+            return view_func(request, *args, **kwargs)
+        return wrapper
+    return decorator
+
+``
+roles/models.py
+# apps/roles/models.py
+from django.db import models
+from django.conf import settings
+
+
+class Permission(models.Model):
+    """Individual permissions like 'can_create_post', 'can_delete_user'"""
+    name = models.CharField(max_length=100, unique=True)        # e.g. 'can_create_post'
+    display_name = models.CharField(max_length=100)             # e.g. 'Can Create Post'
+    group = models.CharField(max_length=50, blank=True)         # e.g. 'posts', 'users'
+    description = models.TextField(blank=True)
+
+    def __str__(self):
+        return self.display_name
+
+    class Meta:
+        db_table = 'permissions'
+        ordering = ['group', 'name']
+
+
+class Role(models.Model):
+    """Roles like 'admin', 'user', 'moderator'"""
+    name = models.CharField(max_length=50, unique=True)         # e.g. 'admin'
+    display_name = models.CharField(max_length=100)             # e.g. 'Administrator'
+    description = models.TextField(blank=True)
+    permissions = models.ManyToManyField(Permission, blank=True, related_name='roles')
+    is_default = models.BooleanField(default=False)             # Default role for new users
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.display_name
+
+    def has_permission(self, permission_name):
+        return self.permissions.filter(name=permission_name).exists()
+
+    class Meta:
+        db_table = 'roles'
+
+
+class UserRole(models.Model):
+    """Assign roles to users (many-to-many with extra fields)"""
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='user_roles'
+    )
+    role = models.ForeignKey(Role, on_delete=models.CASCADE, related_name='user_roles')
+    assigned_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'user_roles'
+        unique_together = ('user', 'role')
+
+    def __str__(self):
+        return f"{self.user.email} → {self.role.name}"
+
+D:\python\django\vistalk\apps\roles\urls.py
+# apps/roles/views.py
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib import messages
+from django.views.generic import View
+from django.contrib.auth.decorators import login_required
+from django.utils.decorators import method_decorator
+from django.http import HttpResponseForbidden
+
+from apps.roles.models import Role, Permission, UserRole
+from apps.roles.mixins import has_permission
+
+
+# ─── Access Guard ─────────────────────────────────────────────────────────────
+
+def system_only(view):
+    """Only system users with proper permissions can access roles management"""
+    @login_required(login_url='/admin/login/')
+    def wrapped(request, *args, **kwargs):
+        if request.user.user_type != 'system':
+            return redirect('core:dashboard')
+        return view(request, *args, **kwargs)
+    return wrapped
+
+
+# ─── List Roles ───────────────────────────────────────────────────────────────
+
+@method_decorator(system_only, name='dispatch')
+class RoleListView(View):
+    """
+    List all roles - requires: can_view_roles
+    Also controls sidebar visibility
+    """
+    def get(self, request):
+        if not has_permission(request.user, 'can_view_roles'):
+            return HttpResponseForbidden("You don't have permission to view roles.")
+
+        roles = Role.objects.prefetch_related('permissions', 'user_roles').all().order_by('name')
+        return render(request, 'roles/index.html', {
+            'roles': roles,
+            'total': roles.count(),
+            'permission_count': Permission.objects.count(),
+            'default_role': Role.objects.filter(is_default=True).first(),
+        })
+
+
+# ─── Create Role ──────────────────────────────────────────────────────────────
+
+@method_decorator(system_only, name='dispatch')
+class RoleCreateView(View):
+    """
+    Create a new role and assign permissions - requires: can_create_roles
+    Admin can select any combination of permissions
+    """
+    template_name = 'roles/create.html'
+
+    def get(self, request):
+        if not has_permission(request.user, 'can_create_roles'):
+            return HttpResponseForbidden("You don't have permission to create roles.")
+
+        permissions = Permission.objects.all().order_by('group', 'display_name')
+        return render(request, self.template_name, {
+            'permissions': permissions,
+            'perm_groups': _group_permissions(permissions),
+        })
+
+    def post(self, request):
+        if not has_permission(request.user, 'can_create_roles'):
+            return HttpResponseForbidden("You don't have permission to create roles.")
+
+        name = request.POST.get('name', '').strip().lower().replace(' ', '_')
+        display_name = request.POST.get('display_name', '').strip()
+        description = request.POST.get('description', '').strip()
+        is_default = request.POST.get('is_default') == 'on'
+        selected_perm_ids = request.POST.getlist('permissions')
+
+        errors = {}
+
+        if not name:
+            errors['name'] = 'Role name is required.'
+        elif Role.objects.filter(name=name).exists():
+            errors['name'] = 'A role with this name already exists.'
+
+        if not display_name:
+            errors['display_name'] = 'Display name is required.'
+
+        if errors:
+            permissions = Permission.objects.all().order_by('group', 'display_name')
+            return render(request, self.template_name, {
+                'permissions': permissions,
+                'perm_groups': _group_permissions(permissions),
+                'errors': errors,
+                'old': request.POST,
+                'selected_perm_ids': list(map(int, selected_perm_ids)),
+            })
+
+        # If setting as default, unset others
+        if is_default:
+            Role.objects.filter(is_default=True).update(is_default=False)
+
+        role = Role.objects.create(
+            name=name,
+            display_name=display_name,
+            description=description,
+            is_default=is_default,
+        )
+        role.permissions.set(Permission.objects.filter(id__in=selected_perm_ids))
+
+        messages.success(request, f"Role '{role.display_name}' created successfully.")
+        return redirect('roles:index')
+
+
+# ─── Edit Role ────────────────────────────────────────────────────────────────
+
+@method_decorator(system_only, name='dispatch')
+class RoleEditView(View):
+    """
+    Edit role details and update its permissions - requires: can_edit_roles
+    """
+    template_name = 'roles/edit.html'
+
+    def get(self, request, pk):
+        if not has_permission(request.user, 'can_edit_roles'):
+            return HttpResponseForbidden("You don't have permission to edit roles.")
+
+        role = get_object_or_404(Role, pk=pk)
+        permissions = Permission.objects.all().order_by('group', 'display_name')
+        assigned_ids = set(role.permissions.values_list('id', flat=True))
+
+        return render(request, self.template_name, {
+            'role': role,
+            'permissions': permissions,
+            'perm_groups': _group_permissions(permissions),
+            'assigned_ids': assigned_ids,
+        })
+
+    def post(self, request, pk):
+        if not has_permission(request.user, 'can_edit_roles'):
+            return HttpResponseForbidden("You don't have permission to edit roles.")
+
+        role = get_object_or_404(Role, pk=pk)
+
+        name = request.POST.get('name', '').strip().lower().replace(' ', '_')
+        display_name = request.POST.get('display_name', '').strip()
+        description = request.POST.get('description', '').strip()
+        is_default = request.POST.get('is_default') == 'on'
+        selected_perm_ids = request.POST.getlist('permissions')
+
+        errors = {}
+
+        if not name:
+            errors['name'] = 'Role name is required.'
+        elif Role.objects.filter(name=name).exclude(pk=pk).exists():
+            errors['name'] = 'A role with this name already exists.'
+
+        if not display_name:
+            errors['display_name'] = 'Display name is required.'
+
+        if errors:
+            permissions = Permission.objects.all().order_by('group', 'display_name')
+            return render(request, self.template_name, {
+                'role': role,
+                'permissions': permissions,
+                'perm_groups': _group_permissions(permissions),
+                'assigned_ids': set(map(int, selected_perm_ids)),
+                'errors': errors,
+                'old': request.POST,
+            })
+
+        # If setting as default, unset others
+        if is_default:
+            Role.objects.filter(is_default=True).exclude(pk=pk).update(is_default=False)
+
+        role.name = name
+        role.display_name = display_name
+        role.description = description
+        role.is_default = is_default
+        role.save()
+
+        role.permissions.set(Permission.objects.filter(id__in=selected_perm_ids))
+
+        messages.success(request, f"Role '{role.display_name}' updated successfully.")
+        return redirect('roles:index')
+
+
+# ─── Delete Role ──────────────────────────────────────────────────────────────
+
+@method_decorator(system_only, name='dispatch')
+class RoleDeleteView(View):
+    """
+    Delete a role - requires: can_delete_roles
+    Guards:
+      - Cannot delete default role
+      - Cannot delete if users are assigned to it
+    """
+    def post(self, request, pk):
+        if not has_permission(request.user, 'can_delete_roles'):
+            return HttpResponseForbidden("You don't have permission to delete roles.")
+
+        role = get_object_or_404(Role, pk=pk)
+
+        # Guard 1: default role
+        if role.is_default:
+            messages.error(request, f"Cannot delete '{role.display_name}' - it is the default role.")
+            return redirect('roles:index')
+
+        # Guard 2: users assigned
+        user_count = UserRole.objects.filter(role=role).count()
+        if user_count > 0:
+            messages.error(
+                request,
+                f"Cannot delete '{role.display_name}' - {user_count} user(s) are assigned to this role."
+            )
+            return redirect('roles:index')
+
+        role_name = role.display_name
+        role.delete()
+        messages.success(request, f"Role '{role_name}' deleted successfully.")
+        return redirect('roles:index')
+
+
+# ─── Helper ───────────────────────────────────────────────────────────────────
+
+def _group_permissions(permissions):
+    """Group permissions by their group field for template rendering"""
+    groups = {}
+    for perm in permissions:
+        groups.setdefault(perm.group, []).append(perm)
+    return groups  # {'users': [...], 'roles': [...], 'core': [...]}
+
+D:\python\django\vistalk\apps\users\admin.py
+
+# apps/users/admin.py
+from django.contrib import admin
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from .models import User
+
+
+@admin.register(User)
+class UserAdmin(BaseUserAdmin):
+    list_display = ['email', 'username', 'user_type', 'is_active', 'is_staff', 'date_joined']
+    list_filter = ['user_type', 'is_active', 'is_staff']
+    search_fields = ['email', 'username']
+    ordering = ['-date_joined']
+
+    fieldsets = BaseUserAdmin.fieldsets + (
+        ('User Type & Role', {
+            'fields': ('user_type',)
+        }),
+    )
+
+    add_fieldsets = BaseUserAdmin.add_fieldsets + (
+        ('User Type', {
+            'fields': ('email', 'user_type',)
+        }),
+    )
+
+D:\python\django\vistalk\apps\users\forms.py
+from django import forms
+from apps.users.models import User
+from apps.roles.models import Role
+
+
+class UserCreateForm(forms.ModelForm):
+    password = forms.CharField(
+        label='Password',
+        widget=forms.PasswordInput(attrs={'placeholder': 'Password'}),
+        min_length=8
+    )
+    password_confirm = forms.CharField(
+        label='Confirm Password',
+        widget=forms.PasswordInput(attrs={'placeholder': 'Confirm Password'})
+    )
+    roles = forms.ModelMultipleChoiceField(
+        queryset=Role.objects.all(),
+        required=False,
+        label='Assign Roles',
+        widget=forms.CheckboxSelectMultiple
+    )
+
+    class Meta:
+        model = User
+        fields = ['username', 'email', 'user_type', 'is_active', 'password', 'password_confirm', 'roles']
+        widgets = {
+            'username': forms.TextInput(attrs={'placeholder': 'Username'}),
+            'email': forms.EmailInput(attrs={'placeholder': 'Email'}),
+        }
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get('password') != cleaned.get('password_confirm'):
+            raise forms.ValidationError("Passwords do not match.")
+        return cleaned
+
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        if User.objects.filter(email=email).exists():
+            raise forms.ValidationError("This email is already registered.")
+        return email
+
+
+class UserEditForm(forms.ModelForm):
+    roles = forms.ModelMultipleChoiceField(
+        queryset=Role.objects.all(),
+        required=False,
+        label='Assign Roles',
+        widget=forms.CheckboxSelectMultiple
+    )
+
+    class Meta:
+        model = User
+        fields = ['username', 'email', 'user_type', 'is_active', 'is_staff', 'roles']
+        widgets = {
+            'username': forms.TextInput(attrs={'placeholder': 'Username'}),
+            'email': forms.EmailInput(attrs={'placeholder': 'Email'}),
+        }
+
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        qs = User.objects.filter(email=email).exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise forms.ValidationError("This email is already in use.")
+        return email
+
+
+class AdminPasswordChangeForm(forms.Form):
+    """System admin apna password change karega"""
+    current_password = forms.CharField(
+        label='Current Password',
+        widget=forms.PasswordInput(attrs={'placeholder': 'Current Password'})
+    )
+    new_password = forms.CharField(
+        label='New Password',
+        widget=forms.PasswordInput(attrs={'placeholder': 'New Password'}),
+        min_length=8
+    )
+    confirm_password = forms.CharField(
+        label='Confirm New Password',
+        widget=forms.PasswordInput(attrs={'placeholder': 'Confirm New Password'})
+    )
+
+    def __init__(self, user, *args, **kwargs):
+        self.user = user
+        super().__init__(*args, **kwargs)
+
+    def clean_current_password(self):
+        current = self.cleaned_data.get('current_password')
+        if not self.user.check_password(current):
+            raise forms.ValidationError("Current password is incorrect.")
+        return current
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get('new_password') != cleaned.get('confirm_password'):
+            raise forms.ValidationError("New passwords do not match.")
+        return cleaned
+
+
+D:\python\django\vistalk\apps\users\models.py
+
+# apps/users/models.py
+from django.contrib.auth.models import AbstractUser
+from django.db import models
+
+
+class User(AbstractUser):
+    USER_TYPE_CHOICES = [
+        ('system', 'System'),      # Company employees/staff - only login, no register
+        ('platform', 'Platform'),  # Web users - can register
+    ]
+
+    user_type = models.CharField(
+        max_length=20,
+        choices=USER_TYPE_CHOICES,
+        default='platform'
+    )
+
+    email = models.EmailField(unique=True)
+
+    # We'll use email as the primary login field
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = ['username']
+
+    def is_system_user(self):
+        return self.user_type == 'system'
+
+    def is_platform_user(self):
+        return self.user_type == 'platform'
+
+    def __str__(self):
+        return f"{self.email} ({self.user_type})"
+
+    class Meta:
+        db_table = 'users'
+        verbose_name = 'User'
+        verbose_name_plural = 'Users'
+
+D:\python\django\vistalk\apps\users\urls.py
+
+from django.urls import path
+from . import views
+
+app_name = 'users'
+
+urlpatterns = [
+    path('admin/users/',                    views.UserListView.as_view(),         name='index'),
+    path('admin/users/create/',             views.UserCreateView.as_view(),       name='create'),
+    path('admin/users/<int:pk>/edit/',      views.UserEditView.as_view(),         name='edit'),
+    path('admin/users/<int:pk>/delete/',    views.UserDeleteView.as_view(),       name='delete'),
+    path('admin/users/<int:pk>/toggle/',    views.UserToggleActiveView.as_view(), name='toggle'),
+]
+
+D:\python\django\vistalk\apps\users\views.py
+# apps/users/views.py
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from django.utils.decorators import method_decorator
+from django.contrib import messages
+from django.views.generic import View
+from django.http import HttpResponseForbidden
+
+from apps.users.models import User
+from apps.roles.models import Role, UserRole
+from apps.roles.mixins import has_permission
+from .forms import UserCreateForm, UserEditForm
+
+
+# ─── Access Guard ─────────────────────────────────────────────────────────────
+
+def system_only(view):
+    """Only system users can access the admin panel"""
+    @login_required(login_url='/admin/login/')
+    def wrapped(request, *args, **kwargs):
+        if request.user.user_type != 'system':
+            return redirect('core:dashboard')
+        return view(request, *args, **kwargs)
+    return wrapped
+
+
+# ─── List Users ───────────────────────────────────────────────────────────────
+
+@method_decorator(system_only, name='dispatch')
+class UserListView(View):
+    """
+    List all users - requires: can_access_users OR can_view_users
+    Controls sidebar visibility via can_access_users
+    """
+    def get(self, request):
+        if not (has_permission(request.user, 'can_access_users') or
+                has_permission(request.user, 'can_view_users')):
+            return HttpResponseForbidden("You don't have permission to view users.")
+
+        search    = request.GET.get('search', '')
+        user_type = request.GET.get('user_type', '')
+
+        users = User.objects.prefetch_related('user_roles__role').all().order_by('-date_joined')
+
+        if search:
+            users = users.filter(email__icontains=search) | \
+                    users.filter(username__icontains=search)
+        if user_type:
+            users = users.filter(user_type=user_type)
+
+        return render(request, 'users/index.html', {
+            'users':            users,
+            'search':           search,
+            'user_type_filter': user_type,
+            'total':            User.objects.count(),
+            'platform_count':   User.objects.filter(user_type='platform').count(),
+            'system_count':     User.objects.filter(user_type='system').count(),
+            # Pass permission flags so template can show/hide action buttons
+            'can_create': has_permission(request.user, 'can_create_users'),
+            'can_edit':   has_permission(request.user, 'can_edit_users'),
+            'can_delete': has_permission(request.user, 'can_delete_users'),
+        })
+
+
+# ─── Create User ──────────────────────────────────────────────────────────────
+
+@method_decorator(system_only, name='dispatch')
+class UserCreateView(View):
+    """requires: can_create_users"""
+    template_name = 'users/create.html'
+
+    def get(self, request):
+        if not has_permission(request.user, 'can_create_users'):
+            return HttpResponseForbidden("You don't have permission to create users.")
+        return render(request, self.template_name, {'form': UserCreateForm()})
+
+    def post(self, request):
+        if not has_permission(request.user, 'can_create_users'):
+            return HttpResponseForbidden("You don't have permission to create users.")
+
+        form = UserCreateForm(request.POST)
+        if form.is_valid():
+            user = form.save(commit=False)
+            user.set_password(form.cleaned_data['password'])
+            if user.user_type == 'system':
+                user.is_staff = True
+            user.save()
+
+            selected_roles = form.cleaned_data.get('roles', [])
+            for role in selected_roles:
+                UserRole.objects.get_or_create(user=user, role=role)
+
+            messages.success(request, f"User '{user.username}' created successfully.")
+            return redirect('users:index')
+
+        return render(request, self.template_name, {'form': form})
+
+
+# ─── Edit User ────────────────────────────────────────────────────────────────
+
+@method_decorator(system_only, name='dispatch')
+class UserEditView(View):
+    """requires: can_edit_users"""
+    template_name = 'users/edit.html'
+
+    def get(self, request, pk):
+        if not has_permission(request.user, 'can_edit_users'):
+            return HttpResponseForbidden("You don't have permission to edit users.")
+
+        user = get_object_or_404(User, pk=pk)
+        current_roles = Role.objects.filter(user_roles__user=user)
+        form = UserEditForm(instance=user, initial={'roles': current_roles})
+        return render(request, self.template_name, {'form': form, 'target_user': user})
+
+    def post(self, request, pk):
+        if not has_permission(request.user, 'can_edit_users'):
+            return HttpResponseForbidden("You don't have permission to edit users.")
+
+        user = get_object_or_404(User, pk=pk)
+        form = UserEditForm(request.POST, instance=user)
+        if form.is_valid():
+            user = form.save(commit=False)
+            if user.user_type == 'system':
+                user.is_staff = True
+            user.save()
+
+            UserRole.objects.filter(user=user).delete()
+            for role in form.cleaned_data.get('roles', []):
+                UserRole.objects.create(user=user, role=role)
+
+            messages.success(request, f"User '{user.username}' updated successfully.")
+            return redirect('users:index')
+
+        return render(request, self.template_name, {'form': form, 'target_user': user})
+
+
+# ─── Delete User ──────────────────────────────────────────────────────────────
+
+@method_decorator(system_only, name='dispatch')
+class UserDeleteView(View):
+    """requires: can_delete_users"""
+    def post(self, request, pk):
+        if not has_permission(request.user, 'can_delete_users'):
+            return HttpResponseForbidden("You don't have permission to delete users.")
+
+        user = get_object_or_404(User, pk=pk)
+        if user == request.user:
+            messages.error(request, "You cannot delete your own account.")
+            return redirect('users:index')
+
+        username = user.username
+        user.delete()
+        messages.success(request, f"User '{username}' deleted.")
+        return redirect('users:index')
+
+
+# ─── Toggle Active ────────────────────────────────────────────────────────────
+
+@method_decorator(system_only, name='dispatch')
+class UserToggleActiveView(View):
+    """Quick activate/deactivate - requires: can_edit_users"""
+    def post(self, request, pk):
+        if not has_permission(request.user, 'can_edit_users'):
+            return HttpResponseForbidden("You don't have permission to do this.")
+
+        user = get_object_or_404(User, pk=pk)
+        if user == request.user:
+            messages.error(request, "You cannot deactivate yourself.")
+            return redirect('users:index')
+
+        user.is_active = not user.is_active
+        user.save()
+        status = "activated" if user.is_active else "deactivated"
+        messages.success(request, f"User '{user.username}' {status}.")
+        return redirect('users:index')
+
+templates
+    /base.html
+    <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Vistalk{% endblock %}</title>
+    
+    <!-- Preconnect for fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <!-- Main Stylesheets -->
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/variables.css' %}">
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+
+<!-- Theme initialization script - runs before anything else -->
+<script>
+    (function() {
+        // Get saved theme or default to light
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        
+        // Apply theme to body
+        document.body.setAttribute('data-theme', savedTheme);
+        
+        // Make theme available globally
+        window.currentTheme = savedTheme;
+    })();
+</script>
+
+{% if messages %}
+<div class="toast-wrap">
+    {% for message in messages %}
+    <div class="toast {{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% block content %}{% endblock %}
+
+<!-- Consolidated JavaScript -->
+<script>
+    // Theme toggle function
+    function toggleTheme() {
+        const body = document.body;
+        const currentTheme = body.getAttribute('data-theme');
+        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+        
+        // Update body attribute
+        body.setAttribute('data-theme', newTheme);
+        
+        // Save to localStorage
+        localStorage.setItem('theme', newTheme);
+        
+        // Update global variable
+        window.currentTheme = newTheme;
+        
+        // Update active state on toggle buttons (if you want visual feedback)
+        document.querySelectorAll('.theme-toggle i').forEach(icon => {
+            icon.classList.remove('active');
+            if ((newTheme === 'light' && icon.classList.contains('fa-sun')) ||
+                (newTheme === 'dark' && icon.classList.contains('fa-moon'))) {
+                icon.classList.add('active');
+            }
+        });
+    }
+
+    // Initialize theme toggle buttons on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        const currentTheme = document.body.getAttribute('data-theme');
+        
+        // Set active state on theme toggle icons
+        document.querySelectorAll('.theme-toggle i').forEach(icon => {
+            icon.classList.remove('active');
+            if ((currentTheme === 'light' && icon.classList.contains('fa-sun')) ||
+                (currentTheme === 'dark' && icon.classList.contains('fa-moon'))) {
+                icon.classList.add('active');
+            }
+        });
+    });
+
+    // Toast auto-dismiss
+    setTimeout(() => {
+        document.querySelectorAll('.toast').forEach(toast => {
+            toast.style.transition = 'opacity .5s';
+            toast.style.opacity = '0';
+            setTimeout(() => toast.remove(), 500);
+        });
+    }, 4000);
+
+    // Mobile menu toggle
+    function toggleMobileMenu() {
+        const menu = document.getElementById('mobileMenu');
+        if (menu) menu.classList.toggle('open');
+    }
+
+    // User dropdown toggle
+    function toggleUserDropdown() {
+        const dropdown = document.getElementById('userDropdown');
+        if (dropdown) dropdown.classList.toggle('open');
+    }
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+        const chip = document.querySelector('.sys-user-chip');
+        const dropdown = document.getElementById('userDropdown');
+        
+        if (chip && dropdown && !chip.contains(e.target)) {
+            dropdown.classList.remove('open');
+        }
+    });
+</script>
+
+<!-- Font Awesome for icons -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+{% block extra_js %}{% endblock %}
+</body>
+</html>
+
+``
+home.html
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Vistalk - Connect & Communicate{% endblock %}
+
+{% block body_class %}home-page{% endblock %}
+
+{% block content %}
+<!-- Navbar -->
+{% include 'components/navbar_public.html' %}
+
+<!-- Hero Section -->
+<section class="hero">
+    <div class="container">
+        <div class="hero-grid">
+            <div>
+                <div class="hero-eyebrow">
+                    ✨ Now in Beta 
+                    <span>v2.0</span>
+                </div>
+                
+                <h1 class="hero-title">
+                    The smarter way to<br><em>connect & communicate</em>
+                </h1>
+                
+                <p class="hero-desc">
+                    Vistalk brings your team together with real-time messaging, smart notifications, and powerful collaboration tools - all in one place.
+                </p>
+                
+                <div class="hero-stats">
+                    <div>
+                        <div class="stat-number">10K+</div>
+                        <div class="stat-label">Active Users</div>
+                    </div>
+                    <div>
+                        <div class="stat-number">99.9%</div>
+                        <div class="stat-label">Uptime</div>
+                    </div>
+                    <div>
+                        <div class="stat-number">24/7</div>
+                        <div class="stat-label">Support</div>
+                    </div>
+                </div>
+                
+                <div class="hero-ctas">
+                    <a href="{% url 'accounts:register' %}" class="btn btn-primary">
+                        Start Free Trial
+                        <i class="fas fa-arrow-right"></i>
+                    </a>
+                    <a href="#" class="btn btn-outline">Watch Demo</a>
+                </div>
+            </div>
+            
+            <div class="hero-cards">
+                <div class="hero-card">
+                    <div class="hero-card-header">
+                        <div class="hc-icon">💬</div>
+                        <div>
+                            <div class="hc-title">Real-time Chat</div>
+                            <div class="hc-sub">Instant messaging</div>
+                        </div>
+                    </div>
+                    <p>Messages delivered in milliseconds across all devices with read receipts.</p>
+                </div>
+                
+                <div class="hero-card">
+                    <div class="hero-card-header">
+                        <div class="hc-icon">🛡️</div>
+                        <div>
+                            <div class="hc-title">Role-based Access</div>
+                            <div class="hc-sub">Fine-grained control</div>
+                        </div>
+                    </div>
+                    <p>Advanced RBAC system with granular permissions. Control exactly who sees what.</p>
+                </div>
+                
+                <div class="hero-card">
+                    <div class="hero-card-header">
+                        <div class="hc-icon">📊</div>
+                        <div>
+                            <div class="hc-title">Analytics</div>
+                            <div class="hc-sub">Track everything</div>
+                        </div>
+                    </div>
+                    <p>Understand usage patterns with detailed insights and real-time monitoring.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Trust Badges -->
+<section class="trust-badges">
+    <div class="container">
+        <div class="trust-text">Trusted by innovative teams</div>
+        <div class="badges">
+            <div class="badge-item">
+                <i class="fas fa-shield-alt"></i>
+                <span>Enterprise Ready</span>
+            </div>
+            <div class="badge-item">
+                <i class="fas fa-lock"></i>
+                <span>End-to-End Encrypted</span>
+            </div>
+            <div class="badge-item">
+                <i class="fas fa-globe"></i>
+                <span>Global Infrastructure</span>
+            </div>
+            <div class="badge-item">
+                <i class="fas fa-clock"></i>
+                <span>99.9% Uptime SLA</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Features Section -->
+<section class="section" id="features">
+    <div class="container">
+        <div class="section-header">
+            <div class="section-label">Why Choose Vistalk</div>
+            <h2 class="section-title">Everything you need, nothing you don't</h2>
+            <p class="section-subtitle">Built for modern teams who value speed, security, and simplicity.</p>
+        </div>
+        
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">⚡</div>
+                <h3 class="feature-title">Lightning Fast</h3>
+                <p class="feature-desc">Built on modern infrastructure with WebSocket support. Zero compromise on speed.</p>
+            </div>
+            
+            <div class="feature-card">
+                <div class="feature-icon">🔒</div>
+                <h3 class="feature-title">Secure by Default</h3>
+                <p class="feature-desc">End-to-end encryption, RBAC, and enterprise-grade security baked in from day one.</p>
+            </div>
+            
+            <div class="feature-card">
+                <div class="feature-icon">🎯</div>
+                <h3 class="feature-title">Smart Permissions</h3>
+                <p class="feature-desc">Create custom roles and assign granular permissions with our advanced RBAC system.</p>
+            </div>
+            
+            <div class="feature-card">
+                <div class="feature-icon">🌐</div>
+                <h3 class="feature-title">Real-time Sync</h3>
+                <p class="feature-desc">Changes sync instantly across all devices. Never miss an update.</p>
+            </div>
+            
+            <div class="feature-card">
+                <div class="feature-icon">📱</div>
+                <h3 class="feature-title">Mobile First</h3>
+                <p class="feature-desc">Fully responsive design that works perfectly on all devices.</p>
+            </div>
+            
+            <div class="feature-card">
+                <div class="feature-icon">🤝</div>
+                <h3 class="feature-title">Team Collaboration</h3>
+                <p class="feature-desc">Powerful tools for teams to work together seamlessly.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Testimonials -->
+<section class="section" style="background: var(--bg-secondary);" id="testimonials">
+    <div class="container">
+        <div class="section-header">
+            <div class="section-label">Testimonials</div>
+            <h2 class="section-title">Loved by teams worldwide</h2>
+            <p class="section-subtitle">See what our customers have to say about Vistalk.</p>
+        </div>
+        
+        <div class="testimonials-grid">
+            <div class="testimonial-card">
+                <div class="testimonial-content">
+                    "Vistalk has transformed how our team communicates. The role-based access system is exactly what we needed."
+                </div>
+                <div class="testimonial-author">
+                    <div class="author-avatar">JD</div>
+                    <div class="author-info">
+                        <h4>John Doe</h4>
+                        <p>CTO, TechStart</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="testimonial-card">
+                <div class="testimonial-content">
+                    "The real-time sync and instant messaging have made our remote team feel like we're in the same office."
+                </div>
+                <div class="testimonial-author">
+                    <div class="author-avatar">JS</div>
+                    <div class="author-info">
+                        <h4>Jane Smith</h4>
+                        <p>Product Lead, InnovateCo</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- CTA Section -->
+<section class="cta-section">
+    <div class="container">
+        <h2>Ready to transform your team communication?</h2>
+        <p>Join thousands of teams who trust Vistalk for their daily communication needs.</p>
+        <div class="cta-buttons">
+            <a href="{% url 'accounts:register' %}" class="btn btn-light">Start Free Trial</a>
+            <a href="{% url 'accounts:login' %}" class="btn btn-outline-light">Sign In</a>
+        </div>
+    </div>
+</section>
+
+<!-- Footer -->
+<footer class="footer">
+    <div class="container">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a href="/" class="logo">V<span>istalk</span></a>
+                <p>Modern communication platform for teams who value speed, security, and simplicity.</p>
+            </div>
+            
+            <div class="footer-links">
+                <h4>Product</h4>
+                <ul>
+                    <li><a href="#features">Features</a></li>
+                    <li><a href="#pricing">Pricing</a></li>
+                    <li><a href="#security">Security</a></li>
+                    <li><a href="#roadmap">Roadmap</a></li>
+                </ul>
+            </div>
+            
+            <div class="footer-links">
+                <h4>Company</h4>
+                <ul>
+                    <li><a href="#about">About</a></li>
+                    <li><a href="#blog">Blog</a></li>
+                    <li><a href="#careers">Careers</a></li>
+                    <li><a href="#press">Press</a></li>
+                </ul>
+            </div>
+            
+            <div class="footer-links">
+                <h4>Support</h4>
+                <ul>
+                    <li><a href="#help">Help Center</a></li>
+                    <li><a href="#docs">Documentation</a></li>
+                    <li><a href="#contact">Contact</a></li>
+                    <li><a href="#status">Status</a></li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="footer-bottom">
+            <p>© 2025 Vistalk. Built with Django. All rights reserved.</p>
+        </div>
+    </div>
+</footer>
+{% endblock %}
+
+``
+D:\python\django\vistalk\templates\accounts\forgot_password.html
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Forgot Password - Vistalk{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/auth.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="auth-wrapper">
+    <!-- Left Panel - Same as login/register -->
+    <div class="auth-left">
+        <a href="{% url 'accounts:home' %}" class="auth-brand">V<span>istalk</span></a>
+        <h2>Reset your<br><em>password</em></h2>
+        <p>We'll help you get back into your account securely and quickly.</p>
+        <div class="feature-list">
+            <div class="feature-item">
+                <div class="feature-item-icon">🔒</div>
+                Secure reset process
+            </div>
+            <div class="feature-item">
+                <div class="feature-item-icon">⚡</div>
+                Quick email delivery
+            </div>
+            <div class="feature-item">
+                <div class="feature-item-icon">🛡️</div>
+                End-to-end encrypted
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Panel -->
+    <div class="auth-right">
+        <div class="auth-card">
+            <!-- Back button -->
+            <a href="{% url 'accounts:login' %}" class="back-btn">
+                <i class="fas fa-arrow-left"></i> Back to Sign In
+            </a>
+            
+            <!-- Icon -->
+            <div class="icon-wrap">🔑</div>
+            
+            <!-- Header -->
+            <h1>Forgot password?</h1>
+            <p>No worries! Enter your email and we'll send you a reset link.</p>
+
+            <!-- Form -->
+            <form method="POST">
+                {% csrf_token %}
+                
+                {% if form.non_field_errors %}
+                <div class="non-field-error">{{ form.non_field_errors.0 }}</div>
+                {% endif %}
+                
+                {% for field in form %}
+                <div class="form-group">
+                    <label class="form-label">{{ field.label }}</label>
+                    <input class="form-input"
+                        type="{{ field.field.widget.input_type }}"
+                        name="{{ field.html_name }}"
+                        placeholder="Enter your {{ field.label|lower }}"
+                        value="{{ field.value|default:'' }}"
+                        {% if field.field.widget.attrs.autofocus %}autofocus{% endif %}>
+                    {% for error in field.errors %}
+                        <p class="form-error">⚠ {{ error }}</p>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+
+                <button type="submit" class="btn-submit">
+                    Send Reset Link <i class="fas fa-arrow-right"></i>
+                </button>
+            </form>
+
+            <!-- Footer -->
+            <div class="auth-switch">
+                Remember your password? <a href="{% url 'accounts:login' %}">Sign In</a>
+            </div>
+            <div class="auth-switch" style="margin-top:10px">
+                <a href="{% url 'accounts:home' %}" style="color:var(--text-muted)">
+                    <i class="fas fa-home"></i> Back to Home
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+D:\python\django\vistalk\templates\accounts\login.html
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Sign In - Vistalk{% endblock %}
+
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/auth.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="auth-wrapper">
+    <!-- Left -->
+    <div class="auth-left">
+        <a href="{% url 'accounts:home' %}" class="auth-brand">V<span>istalk</span></a>
+        <h2>Welcome<br>back to <em>Vistalk</em></h2>
+        <p>Sign in to continue to your dashboard and connect with your team.</p>
+        <div class="feature-list">
+            <div class="feature-item">
+                <div class="feature-item-icon">⚡</div>
+                Real-time messaging
+            </div>
+            <div class="feature-item">
+                <div class="feature-item-icon">🛡️</div>
+                Role-based access control
+            </div>
+            <div class="feature-item">
+                <div class="feature-item-icon">📊</div>
+                Advanced analytics
+            </div>
+        </div>
+    </div>
+
+    <!-- Right -->
+    <div class="auth-right">
+        <div class="auth-card">
+            <div class="auth-card-header">
+                <h1>Sign In</h1>
+                <p>Enter your credentials to access your account</p>
+            </div>
+
+            {% if form.non_field_errors %}
+            <div class="non-field-error">{{ form.non_field_errors.0 }}</div>
+            {% endif %}
+
+            <form method="POST">
+                {% csrf_token %}
+                {% for field in form %}
+                <div class="form-group">
+                    <label class="form-label">{{ field.label }}</label>
+                    <input class="form-input"
+                        type="{{ field.field.widget.input_type }}"
+                        name="{{ field.html_name }}"
+                        placeholder="{{ field.field.widget.attrs.placeholder|default:'' }}"
+                        value="{{ field.value|default:'' }}"
+                        {% if field.field.widget.attrs.autofocus %}autofocus{% endif %}>
+                    {% for error in field.errors %}
+                        <p class="form-error">⚠ {{ error }}</p>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+
+                <div class="form-footer-row">
+                    <span></span>
+                    <a href="{% url 'accounts:forgot_password' %}">Forgot password?</a>
+                </div>
+
+                <button type="submit" class="btn-submit">Sign In →</button>
+            </form>
+
+            <div class="auth-switch">
+                Don't have an account? <a href="{% url 'accounts:register' %}">Create one free</a>
+            </div>
+            <div class="auth-switch" style="margin-top:12px">
+                <a href="{% url 'accounts:home' %}" style="color:var(--text-muted)">← Back to Home</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+D:\python\django\vistalk\templates\accounts\register.html
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Create Account - Vistalk{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/auth.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="auth-wrapper">
+    <div class="auth-left">
+        <a href="{% url 'accounts:home' %}" class="auth-brand">V<span>istalk</span></a>
+        <h2>Join <em>Vistalk</em><br>for free today</h2>
+        <p>Create your account in seconds and start communicating smarter with your team.</p>
+        <div class="steps">
+            <div class="step">
+                <div class="step-num">1</div>
+                <div class="step-text">
+                    <strong>Create your account</strong>
+                    <span>Fill in your basic details below</span>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-num">2</div>
+                <div class="step-text">
+                    <strong>Set up your profile</strong>
+                    <span>Customize your workspace</span>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-num">3</div>
+                <div class="step-text">
+                    <strong>Invite your team</strong>
+                    <span>Start collaborating instantly</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="auth-right">
+        <div class="auth-card">
+            <div class="auth-card-header">
+                <h1>Create Account</h1>
+                <p>Start your free journey with Vistalk</p>
+            </div>
+
+            {% if form.non_field_errors %}
+            <div class="non-field-error">{{ form.non_field_errors.0 }}</div>
+            {% endif %}
+
+            <form method="POST">
+                {% csrf_token %}
+                {% for field in form %}
+                <div class="form-group">
+                    <label class="form-label">{{ field.label }}</label>
+                    <input class="form-input"
+                        type="{{ field.field.widget.input_type }}"
+                        name="{{ field.html_name }}"
+                        placeholder="{{ field.field.widget.attrs.placeholder|default:field.label }}"
+                        value="{{ field.value|default:'' }}">
+                    {% for error in field.errors %}
+                        <p class="form-error">⚠ {{ error }}</p>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+
+                <button type="submit" class="btn-submit">Create Free Account →</button>
+            </form>
+
+            <div class="auth-switch">
+                Already have an account? <a href="{% url 'accounts:login' %}">Sign In</a>
+            </div>
+            <div class="auth-switch" style="margin-top:10px">
+                <a href="{% url 'accounts:home' %}" style="color:var(--text-muted)">← Back to Home</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+``
+D:\python\django\vistalk\templates\accounts\reset_password.html
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Reset Password - Vistalk{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/auth.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="auth-wrapper">
+    <!-- Left Panel -->
+    <div class="auth-left">
+        <a href="{% url 'accounts:home' %}" class="auth-brand">V<span>istalk</span></a>
+        <h2>Create a new<br><em>password</em></h2>
+        <p>Choose a strong password that you haven't used before to keep your account secure.</p>
+        <div class="feature-list">
+            <div class="feature-item">
+                <div class="feature-item-icon">🔒</div>
+                End-to-end encrypted
+            </div>
+            <div class="feature-item">
+                <div class="feature-item-icon">🛡️</div>
+                Secure password storage
+            </div>
+            <div class="feature-item">
+                <div class="feature-item-icon">⚡</div>
+                Instant activation
+            </div>
+        </div>
+        
+        <!-- Password Tips -->
+        <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--border-color);">
+            <div style="font-size: 13px; font-weight: 600; color: var(--text-muted); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px;">
+                Password Tips
+            </div>
+            <div class="step" style="margin-bottom: 12px;">
+                <div class="step-num" style="width: 24px; height: 24px; font-size: 12px;">✓</div>
+                <div class="step-text">
+                    <span style="font-size: 13px;">At least 8 characters long</span>
+                </div>
+            </div>
+            <div class="step" style="margin-bottom: 12px;">
+                <div class="step-num" style="width: 24px; height: 24px; font-size: 12px;">✓</div>
+                <div class="step-text">
+                    <span style="font-size: 13px;">Mix of letters and numbers</span>
+                </div>
+            </div>
+            <div class="step" style="margin-bottom: 12px;">
+                <div class="step-num" style="width: 24px; height: 24px; font-size: 12px;">✓</div>
+                <div class="step-text">
+                    <span style="font-size: 13px;">Include special characters</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Panel -->
+    <div class="auth-right">
+        <div class="auth-card">
+            <!-- Back button (optional - depends on your flow) -->
+            <a href="{% url 'accounts:login' %}" class="back-btn">
+                <i class="fas fa-arrow-left"></i> Back to Sign In
+            </a>
+            
+            <!-- Icon -->
+            <div class="icon-wrap">🔒</div>
+            
+            <!-- Header -->
+            <h1>Set new password</h1>
+            <p>Choose a strong password for your account.</p>
+
+            <!-- Form -->
+            <form method="POST" id="resetPasswordForm">
+                {% csrf_token %}
+                
+                {% if form.non_field_errors %}
+                <div class="non-field-error">{{ form.non_field_errors.0 }}</div>
+                {% endif %}
+                
+                {% for field in form %}
+                <div class="form-group">
+                    <label class="form-label">{{ field.label }}</label>
+                    <input class="form-input"
+                        type="{{ field.field.widget.input_type }}"
+                        name="{{ field.html_name }}"
+                        placeholder="Enter {{ field.label|lower }}"
+                        value="{{ field.value|default:'' }}"
+                        id="{{ field.id_for_label }}"
+                        {% if field.field.widget.attrs.autofocus %}autofocus{% endif %}>
+                    
+                    {% if forloop.first %}
+                    <div class="password-hint">
+                        <i class="fas fa-info-circle"></i>
+                        Minimum 8 characters
+                    </div>
+                    
+                    <!-- Optional password strength indicator -->
+                    <div class="password-strength">
+                        <div class="password-strength-bar" id="passwordStrength"></div>
+                    </div>
+                    {% endif %}
+                    
+                    {% for error in field.errors %}
+                        <p class="form-error">⚠ {{ error }}</p>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+
+                <button type="submit" class="btn-submit">
+                    Reset Password <i class="fas fa-arrow-right"></i>
+                </button>
+            </form>
+
+            <!-- Footer -->
+            <div class="auth-switch" style="margin-top: 24px;">
+                <a href="{% url 'accounts:login' %}" style="color: var(--text-muted);">
+                    <i class="fas fa-chevron-left"></i> Return to Sign In
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Optional: Password strength checker -->
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const passwordInput = document.querySelector('input[type="password"]');
+        const strengthBar = document.getElementById('passwordStrength');
+        
+        if (passwordInput && strengthBar) {
+            passwordInput.addEventListener('input', function() {
+                const password = this.value;
+                let strength = 0;
+                
+                // Check length
+                if (password.length >= 8) strength += 1;
+                if (password.length >= 12) strength += 1;
+                
+                // Check for numbers
+                if (/\d/.test(password)) strength += 1;
+                
+                // Check for special characters
+                if (/[!@#$%^&*(),.?":{}|<>]/.test(password)) strength += 1;
+                
+                // Check for uppercase
+                if (/[A-Z]/.test(password)) strength += 1;
+                
+                // Update strength bar
+                strengthBar.className = 'password-strength-bar';
+                if (strength <= 2) {
+                    strengthBar.classList.add('weak');
+                } else if (strength <= 4) {
+                    strengthBar.classList.add('medium');
+                } else {
+                    strengthBar.classList.add('strong');
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}
+
+``
+
+D:\python\django\vistalk\templates\accounts\system_login.html
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Staff Portal - Vistalk{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/auth.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="auth-wrapper">
+    <div class="auth-left">
+        <a href="{% url 'accounts:home' %}" class="auth-brand">V<span>istalk</span></a>
+        <h2>Staff<br><em>Portal</em></h2>
+        <p>Secure access for Vistalk employees and administrators only.</p>
+        <div class="security-features" style="justify-content:flex-start;margin-top:40px;">
+            <div class="security-item">
+                <span>🛡️</span> 2FA Required
+            </div>
+            <div class="security-item">
+                <span>🔒</span> Encrypted
+            </div>
+            <div class="security-item">
+                <span>📋</span> Audit Log
+            </div>
+        </div>
+    </div>
+
+    <div class="auth-right">
+        <div class="auth-card">
+            <div class="staff-badge">STAFF PORTAL</div>
+            
+            <div class="auth-card-header">
+                <h1>Staff Sign In</h1>
+                <p>Authorized personnel only</p>
+            </div>
+
+            {% if form.non_field_errors %}
+            <div class="non-field-error">{{ form.non_field_errors.0 }}</div>
+            {% endif %}
+
+            <form method="POST">
+                {% csrf_token %}
+                {% for field in form %}
+                <div class="form-group">
+                    <label class="form-label">{{ field.label }}</label>
+                    <input class="form-input"
+                        type="{{ field.field.widget.input_type }}"
+                        name="{{ field.html_name }}"
+                        placeholder="Enter your {{ field.label|lower }}"
+                        value="{{ field.value|default:'' }}"
+                        {% if field.field.widget.attrs.autofocus %}autofocus{% endif %}>
+                    {% for error in field.errors %}
+                        <p class="form-error">⚠ {{ error }}</p>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+
+                <button type="submit" class="btn-submit">Access Staff Portal →</button>
+            </form>
+
+            <div class="warning-note">
+                <span>🔐</span>
+                <p>
+                    This portal is for Vistalk employees and administrators only. 
+                    Regular users should login at <a href="{% url 'accounts:login' %}">/login</a>
+                </p>
+            </div>
+
+            <div class="back-link">
+                <a href="{% url 'accounts:home' %}">Back to Public Site</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+
+
+
+``
+D:\python\django\vistalk\templates\components\navbar_public.html
+
+<nav class="navbar">
+    <div class="container">
+        <a href="{% url 'accounts:home' %}" class="logo">V<span>istalk</span></a>
+        
+        <div class="nav-links">
+            <a href="#features">Features</a>
+            <a href="#testimonials">Testimonials</a>
+            <a href="#pricing">Pricing</a>
+            <a href="#about">About</a>
+        </div>
+        
+        <div class="nav-buttons">
+            <button class="theme-toggle" onclick="toggleTheme()">
+                <i class="fas fa-sun"></i>
+                <i class="fas fa-moon"></i>
+            </button>
+            
+            {% if user.is_authenticated %}
+                <a href="{% url 'core:dashboard' %}" class="btn btn-outline">Dashboard</a>
+                <a href="{% url 'accounts:logout' %}" class="btn btn-primary">Logout</a>
+            {% else %}
+                <a href="{% url 'accounts:login' %}" class="btn btn-outline">Sign In</a>
+                <a href="{% url 'accounts:register' %}" class="btn btn-primary">Get Started</a>
+            {% endif %}
+        </div>
+        
+        <!-- Mobile hamburger -->
+        <button class="nav-hamburger" onclick="toggleMobileMenu()">
+            <span></span><span></span><span></span>
+        </button>
+    </div>
+    
+    <!-- Mobile menu -->
+    <div class="nav-mobile" id="mobileMenu">
+        <a href="#features">Features</a>
+        <a href="#testimonials">Testimonials</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#about">About</a>
+        {% if user.is_authenticated %}
+            <a href="{% url 'core:dashboard' %}">Dashboard</a>
+            <a href="{% url 'accounts:logout' %}">Logout</a>
+        {% else %}
+            <a href="{% url 'accounts:login' %}">Login</a>
+            <a href="{% url 'accounts:register' %}">Register</a>
+        {% endif %}
+    </div>
+</nav>
+
+D:\python\django\vistalk\templates\components\navbar_system.html
+<div class="sys-topbar">
+    <div class="sys-topbar-left">
+        <button class="sidebar-toggle" onclick="toggleSidebar()">
+            <i class="fas fa-bars"></i>
+        </button>
+        <div class="sys-brand">Admin Dashboard</div>
+    </div>
+    
+    <div class="sys-topbar-right">
+        <!-- Theme Toggle Button - Fixed: No template logic -->
+        <button class="theme-toggle" onclick="toggleTheme()">
+            <i class="fas fa-sun"></i>
+            <i class="fas fa-moon"></i>
+        </button>
+        
+        <div class="sys-user-chip" onclick="toggleUserDropdown()">
+            <div class="sys-avatar">
+                {{ user.username|first|upper }}
+            </div>
+            <div class="sys-user-info">
+                <span class="sys-user-name">{{ user.get_full_name|default:user.username }}</span>
+                <span class="sys-user-role">Administrator</span>
+            </div>
+            <i class="fas fa-chevron-down" style="font-size:12px;color:var(--sys-muted)"></i>
+        </div>
+        
+        <div class="sys-user-dropdown" id="userDropdown">
+            <div class="dropdown-header">
+                <strong>{{ user.get_full_name|default:user.username }}</strong>
+                <small>{{ user.email }}</small>
+            </div>
+            <a href="#">
+                <i class="fas fa-user"></i> My Profile
+            </a>
+            <a href="#">
+                <i class="fas fa-cog"></i> Account Settings
+            </a>
+            <hr>
+            <a href="{% url 'accounts:logout' %}" class="dropdown-danger">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </a>
+        </div>
+    </div>
+</div>
+
+<script>
+    function toggleSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const main = document.getElementById('sysMain');
+        
+        if (window.innerWidth <= 768) {
+            sidebar.classList.toggle('mobile-open');
+        } else {
+            sidebar.classList.toggle('collapsed');
+            main.classList.toggle('expanded');
+        }
+    }
+</script>
+
+
+
+``D:\python\django\vistalk\templates\components\sidebar_system.html
+{% load rbac_tags %}
+
+<div class="sys-sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <a href="{% url 'accounts:home' %}" class="logo">V<span>istalk</span></a>
+  </div>
+
+  <div class="sidebar-nav">
+    <div class="nav-section-label">MAIN</div>
+
+    <!-- Dashboard - always visible to system users -->
+    <a
+      href="{% url 'core:admin_dashboard' %}"
+      class="sidebar-link {% if request.resolver_match.url_name == 'admin_dashboard' %}active{% endif %}"
+    >
+      <i class="fas fa-chart-pie"></i>
+      <span>Dashboard</span>
+    </a>
+
+    {% if request.user|has_perm:"can_access_users" %}
+    <a
+      href="{% url 'users:index' %}"
+      class="sidebar-link {% if 'admin/users' in request.path %}active{% endif %}"
+    >
+      <i class="fas fa-users"></i>
+      <span>Users</span>
+    </a>
+    {% endif %}
+
+    <!-- Roles - visible if can_access_roles -->
+    {% if request.user|has_perm:"can_access_roles" %}
+    <a
+      href="{% url 'roles:index' %}"
+      class="sidebar-link {% if 'admin/roles' in request.path %}active{% endif %}"
+    >
+      <i class="fas fa-lock"></i>
+      <span>Roles & Permissions</span>
+    </a>
+    {% endif %}
+
+    <!-- Tasks - visible if can_access_tasks -->
+    {% if request.user|has_perm:"can_access_tasks" %}
+    <a
+      href="javascript:;"
+      class="sidebar-link {% if 'admin/tasks' in request.path %}active{% endif %}"
+    >
+      <i class="fas fa-tasks"></i>
+      <span>Tasks</span>
+    </a>
+    {% endif %}
+
+    <div class="nav-section-label">SYSTEM</div>
+
+    <!-- Settings -->
+    <a
+      href="javascript:;"
+      class="sidebar-link {% if 'settings' in request.path %}active{% endif %}"
+    >
+      <i class="fas fa-cog"></i>
+      <span>Settings</span>
+    </a>
+
+    <!-- Audit Logs -->
+    <a
+      href="javascript:;"
+      class="sidebar-link {% if 'audit' in request.path %}active{% endif %}"
+    >
+      <i class="fas fa-history"></i>
+      <span>Audit Logs</span>
+    </a>
+
+    <!-- Analytics -->
+    <a
+      href="javascript:;"
+      class="sidebar-link {% if 'analytics' in request.path %}active{% endif %}"
+    >
+      <i class="fas fa-chart-line"></i>
+      <span>Analytics</span>
+    </a>
+  </div>
+
+  <div class="sidebar-footer">
+    <a href="{% url 'accounts:logout' %}" class="sidebar-link">
+      <i class="fas fa-sign-out-alt"></i>
+      <span>Logout</span>
+    </a>
+  </div>
+</div>
+
+D:\python\django\vistalk\templates\core\admin_dashboard.html
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Admin Dashboard - Vistalk{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/system.css' %}">
+{% endblock %}
+
+{% block body_class %}sys-layout{% endblock %}
+
+{% block content %}
+<div class="sys-wrapper">
+    <!-- Sidebar -->
+    {% include 'components/sidebar_system.html' %}
+
+    <!-- Main Content -->
+    <div class="sys-main" id="sysMain">
+        <!-- Topbar -->
+        {% include 'components/navbar_system.html' %}
+
+        <!-- Content -->
+        <div class="sys-content">
+            <!-- Page Header -->
+            <div class="page-header">
+                <h1 class="page-title">Dashboard Overview</h1>
+                <p class="page-subtitle">Welcome back, {{ user.get_full_name|default:user.username }} - Dashboard</p>
+            </div>
+
+            <!-- Stats Row -->
+            <div class="stats-grid">
+                {% for stat in stats %}
+                <div class="stat-card">
+                    <div class="stat-label">{{ stat.label }}</div>
+                    <div class="stat-value">{{ stat.value }}</div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- User Info Grid -->
+            <div class="grid-2">
+                <!-- Staff Profile Card -->
+                <div class="sys-card">
+                    <div class="sys-card-title">
+                        <i class="fas fa-user"></i> Staff Profile
+                    </div>
+                    
+                    <div class="info-row">
+                        <span class="info-label">Email:</span>
+                        <span class="info-value">{{ user.email }}</span>
+                    </div>
+                    
+                    <div class="info-row">
+                        <span class="info-label">Username:</span>
+                        <span class="info-value">{{ user.username }}</span>
+                    </div>
+                    
+                    <div class="info-row">
+                        <span class="info-label">Full Name:</span>
+                        <span class="info-value">{{ user.get_full_name|default:" Not Available" }}</span>
+                    </div>
+                    
+                    <div class="info-row">
+                        <span class="info-label">Type:</span>
+                        <span class="tag tag-orange">{{ user.user_type|default:"Staff" }}</span>
+                    </div>
+                    
+                    <div class="info-row">
+                        <span class="info-label">Joined:</span>
+                        <span class="info-value">{{ user.date_joined|date:"M d, Y" }}</span>
+                    </div>
+                    
+                    <div class="info-row">
+                        <span class="info-label">Last Login:</span>
+                        <span class="info-value">{{ user.last_login|date:"M d, Y H:i" }}</span>
+                    </div>
+                </div>
+
+                <!-- Roles & Permissions Card -->
+                <div class="sys-card">
+                    <div class="sys-card-title">
+                        <i class="fas fa-lock"></i> Roles & Permissions
+                    </div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <div style="font-size:13px;font-weight:600;color:var(--sys-muted);margin-bottom:10px;">Assigned Roles</div>
+                        <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                            {% for role in user_roles %}
+                                <span class="tag tag-orange">{{ role.display_name|default:role.name }}</span>
+                            {% empty %}
+                                <span class="tag tag-light">No roles assigned</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <div style="font-size:13px;font-weight:600;color:var(--sys-muted);margin-bottom:10px;">Permissions</div>
+                        <div class="permissions-container">
+                            {% for perm in user_permissions %}
+                                <span class="tag tag-mono">{{ perm.name }}</span>
+                            {% empty %}
+                                <span class="tag tag-light">No specific permissions</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Activity (Optional) -->
+            {% if recent_activities %}
+            <div class="recent-activity">
+                <div class="sys-card">
+                    <div class="sys-card-title">
+                        <i class="fas fa-history"></i> Recent Activity
+                    </div>
+                    
+                    {% for activity in recent_activities %}
+                    <div class="activity-item">
+                        <div class="activity-icon">
+                            <i class="fas {{ activity.icon|default:'fa-pencil-alt' }}"></i>
+                        </div>
+                        <div class="activity-details">
+                            <div class="activity-title">{{ activity.description }}</div>
+                            <div class="activity-time">{{ activity.timestamp|timesince }} ago</div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+D:\python\django\vistalk\templates\core\dashboard.html
+
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Dashboard - Vistalk{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+{% endblock %}
+
+{% block content %}
+{% include 'components/navbar_public.html' %}
+
+<div style="max-width:1100px;margin:40px auto;padding:0 24px">
+    <div style="margin-bottom:32px">
+        <h1 style="font-family:var(--font-display);font-size:32px;font-weight:800;letter-spacing:-1px">
+            Dashboard 👋
+        </h1>
+        <p style="color:var(--ink-muted);margin-top:4px">Welcome back, {{ user.get_full_name|default:user.username }}!</p>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px">
+        <!-- Profile Card -->
+        <div class="card">
+            <h3 style="font-family:var(--font-display);font-size:15px;font-weight:700;margin-bottom:16px;color:var(--ink-muted);display:flex;align-items:center;gap:8px;">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                    <circle cx="12" cy="7" r="4"/>
+                </svg>
+                YOUR PROFILE
+            </h3>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+                <p style="margin:0;font-size:14px;color:var(--ink-soft);">
+                    <strong style="color:var(--ink);min-width:80px;display:inline-block;">Email:</strong> 
+                    {{ user.email }}
+                </p>
+                <p style="margin:0;font-size:14px;color:var(--ink-soft);">
+                    <strong style="color:var(--ink);min-width:80px;display:inline-block;">Username:</strong> 
+                    {{ user.username }}
+                </p>
+                <p style="margin:0;font-size:14px;color:var(--ink-soft);">
+                    <strong style="color:var(--ink);min-width:80px;display:inline-block;">Full Name:</strong> 
+                    {{ user.get_full_name|default:"-" }}
+                </p>
+                <p style="margin:0;font-size:14px;color:var(--ink-soft);">
+                    <strong style="color:var(--ink);min-width:80px;display:inline-block;">Joined:</strong> 
+                    {{ user.date_joined|date:"M d, Y" }}
+                </p>
+                <p style="margin:0;font-size:14px;color:var(--ink-soft);">
+                    <strong style="color:var(--ink);min-width:80px;display:inline-block;">Type:</strong> 
+                    <span class="tag tag-blue">{{ user.user_type|default:"User" }}</span>
+                </p>
+            </div>
+        </div>
+
+        <!-- Roles Card -->
+        <div class="card">
+            <h3 style="font-family:var(--font-display);font-size:15px;font-weight:700;margin-bottom:16px;color:var(--ink-muted);display:flex;align-items:center;gap:8px;">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                </svg>
+                YOUR ROLES
+            </h3>
+            <div style="display:flex;flex-wrap:wrap;gap:8px">
+                {% for role in user_roles %}
+                    <span class="tag tag-purple">{{ role.display_name|default:role.name }}</span>
+                {% empty %}
+                    <span style="color:var(--ink-muted);font-size:14px;font-style:italic;">No roles assigned</span>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Quick Actions Card (New) -->
+        <div class="card">
+            <h3 style="font-family:var(--font-display);font-size:15px;font-weight:700;margin-bottom:16px;color:var(--ink-muted);display:flex;align-items:center;gap:8px;">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"/>
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                QUICK ACTIONS
+            </h3>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+                <a href="#" style="color:var(--brand);text-decoration:none;font-size:14px;display:flex;align-items:center;gap:8px;padding:4px 0;">
+                    <span style="font-size:16px;">→</span> Edit Profile
+                </a>
+                <a href="#" style="color:var(--brand);text-decoration:none;font-size:14px;display:flex;align-items:center;gap:8px;padding:4px 0;">
+                    <span style="font-size:16px;">→</span> Account Settings
+                </a>
+                <a href="#" style="color:var(--brand);text-decoration:none;font-size:14px;display:flex;align-items:center;gap:8px;padding:4px 0;">
+                    <span style="font-size:16px;">→</span> View Activity
+                </a>
+            </div>
+        </div>
+
+        <!-- Permissions Card (Full Width) -->
+        <div class="card" style="grid-column:1/-1">
+            <h3 style="font-family:var(--font-display);font-size:15px;font-weight:700;margin-bottom:16px;color:var(--ink-muted);display:flex;align-items:center;gap:8px;">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
+                </svg>
+                YOUR PERMISSIONS
+            </h3>
+            <div style="display:flex;flex-wrap:wrap;gap:8px">
+                {% for perm in user_permissions %}
+                    <span class="tag tag-green" style="font-family:monospace;font-size:12px">{{ perm.name }}</span>
+                {% empty %}
+                    <span style="color:var(--ink-muted);font-size:14px;font-style:italic;">No permissions assigned</span>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Recent Activity Card (Optional) -->
+        <div class="card" style="grid-column:1/-1">
+            <h3 style="font-family:var(--font-display);font-size:15px;font-weight:700;margin-bottom:16px;color:var(--ink-muted);display:flex;align-items:center;gap:8px;">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="20" x2="18" y2="10"/>
+                    <line x1="12" y1="20" x2="12" y2="4"/>
+                    <line x1="6" y1="20" x2="6" y2="14"/>
+                </svg>
+                RECENT ACTIVITY
+            </h3>
+            <div style="display:flex;flex-direction:column;gap:12px;">
+                {% for activity in recent_activities|default:"" %}
+                <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);">
+                    <div style="width:32px;height:32px;background:var(--surface-2);border-radius:8px;display:flex;align-items:center;justify-content:center;">
+                        {{ activity.icon|default:"📝" }}
+                    </div>
+                    <div style="flex:1;">
+                        <div style="font-size:14px;color:var(--ink);">{{ activity.description }}</div>
+                        <div style="font-size:11px;color:var(--ink-muted);">{{ activity.timestamp|timesince }} ago</div>
+                    </div>
+                </div>
+                {% empty %}
+                <span style="color:var(--ink-muted);font-size:14px;font-style:italic;">No recent activity</span>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+
+
+``
+templates/users/index.html
+templates/users/create.html
+templates/users/edit.html
+templates/users/show.html
+
+``
+templates/roles/index.html
+templates/roles/create.html
+templates/roles/edit.html
+templates/roles/show.html
+
+from django.contrib import admin
+from django.urls import path, include
+
+D:\python\django\vistalk\vistalk\urls.py
+
+urlpatterns = [
+    path('django-admin/', admin.site.urls),
+    path('', include('apps.accounts.urls')),
+    path('', include('apps.core.urls')),
+    path('', include('apps.roles.urls')), 
+    path('', include('apps.users.urls')), 
+]
+
+
+These above functionality is almost correct, just some improvements are needed.
+In the system/admin (admin panel), how can users reset their password if they forget it?
+There will be role-based access (RBAC), but using manual if-else checks is not a good approach because it requires checking in every function.
+At the time of user creation, first name, middle name, and last name should be stored, admin can't be delete and see during the user create time and only one role can select at a time.
+The design should be proper, and use only 2 or 3 css files or recommend.
