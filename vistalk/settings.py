@@ -1,14 +1,18 @@
-# vistalk/settings.py
 from pathlib import Path
+from dotenv import load_dotenv
 import os
 import sys
+
+load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, os.path.join(BASE_DIR, 'apps'))
 
-SECRET_KEY = 'django-insecure-@!qtghkf0%)2l=qbj_es$4ld(-a-oc)n$jxgai5lvl+#cx=+='
 
-DEBUG = True
+SECRET_KEY = os.getenv('SECRET_KEY')
+
+# Fix DEBUG setting - should check string value, not boolean
+DEBUG = os.getenv('DEBUG') == 'True'
 ALLOWED_HOSTS = ['*']
 
 INSTALLED_APPS = [
@@ -25,8 +29,9 @@ INSTALLED_APPS = [
     'apps.accounts',
     'apps.core',
     'apps.database',
-    'apps.tasks',
-    'apps.organizations'
+    # 'apps.tasks',
+    # 'apps.organizations',
+    'apps.uploads',
 ]
 
 MIDDLEWARE = [
@@ -94,8 +99,18 @@ LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/dashboard/'
 LOGOUT_REDIRECT_URL = '/login/'
 
+# ─── Email Configuration (SMTP) ───
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
+EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'False') == 'True'
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
+SERVER_EMAIL = os.getenv('SERVER_EMAIL', EMAIL_HOST_USER)
 
-# ── Logging ──
+# ─── Logging ───
 LOGS_DIR = BASE_DIR / 'logs'
 os.makedirs(LOGS_DIR, exist_ok=True)
 
